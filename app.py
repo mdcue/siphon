@@ -1,5 +1,6 @@
 import streamlit as st
 import io
+import pandas as pd
 from webScrapper import table_scraping, clean_dataframe
 
 st.title("*<siphon>*")
@@ -38,10 +39,11 @@ if st.button("Scrape"):
                     )
                 else:
                     buffer = io.BytesIO()
-                    df.to_excel(buffer, index = False, engine = "openpyxl")
+                    with pd.ExcelWriter(buffer, engine = "openpyxl") as writer:
+                        df.to_excel(writer, index = False, sheet_name = f"Table_{i}")
                     st.download_button(
-                        label = f"Download Table {i} as Excel",
+                        label = f"Download all tables as Excel",
                         data = buffer.getvalue(),
-                        file_name = f"table_{i}.xlsx",
+                        file_name = f"tables.xlsx",
                         mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )

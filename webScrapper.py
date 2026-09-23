@@ -42,6 +42,7 @@ def table_scraping(url):
         
         if headers:
             table_df = pd.DataFrame(table_data, columns = headers)
+            table_df = table_df.loc[:, (table_df != "").any()]
             data.append(table_df)
     return data
 

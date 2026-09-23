@@ -29,23 +29,26 @@ if st.button("Scrape"):
             for i, df in enumerate(tables, start = 1):
                 st.subheader(f"Table {i}")
                 st.dataframe(df)
-                
-                if file_format == "csv":
+            
+            if file_format == ".csv(Comma-Separated Values)":
+                for i, df in enumerate(tables, start = 1):
                     st.download_button(
-                        label = f"Download Table {i} as CSV",
+                        label = f"Download Table {i} as CSV.",
                         data = df.to_csv(index = False),
-                        file_name = f"table_{i}.csv",
+                        file_name = f"table{i}.csv",
                         mime = "text/csv",
                         key = f"csv_{i}"
                     )
-                else:
-                    buffer = io.BytesIO()
-                    with pd.ExcelWriter(buffer, engine = "openpyxl") as writer:
+            
+            else:
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine = "openpyxl") as writer:
+                    for i, df in enumerate(tables, start = 1):
                         df.to_excel(writer, index = False, sheet_name = f"Table_{i}")
-                    st.download_button(
-                        label = f"Download all tables as Excel",
-                        data = buffer.getvalue(),
-                        file_name = f"tables.xlsx",
-                        mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key = "excel_all"
-                    )
+                st.download_button(
+                    label = "Download all tables as Excel.",
+                    data = buffer.getvalue(),
+                    file_name = "tables.xlsx",
+                    mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key = "excel_all"
+                )

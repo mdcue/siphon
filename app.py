@@ -6,7 +6,7 @@ st.title("*<siphon>*")
 st.header("A python based web scraper.")
 
 url = st.text_input("Enter the URL of the website to scrape: ")
-file_format = st.selectbox("Output format: ", ["csv", "excel"])
+file_format = st.selectbox("Output format: ", [".csv(Comma-Separated Values)", ".xlsx(Excel Sheet)"])
 clean = st.checkbox("Further cleaning for numeric data (i.e. currency, percentages. etc...)")
 
 if st.button("Scrape"):

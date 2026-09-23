@@ -35,7 +35,8 @@ if st.button("Scrape"):
                         label = f"Download Table {i} as CSV",
                         data = df.to_csv(index = False),
                         file_name = f"table_{i}.csv",
-                        mime = "text/csv"
+                        mime = "text/csv",
+                        key = f"csv_{i}"
                     )
                 else:
                     buffer = io.BytesIO()
@@ -45,5 +46,6 @@ if st.button("Scrape"):
                         label = f"Download all tables as Excel",
                         data = buffer.getvalue(),
                         file_name = f"tables.xlsx",
-                        mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key = "excel_all"
                     )

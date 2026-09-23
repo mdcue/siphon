@@ -7,7 +7,10 @@ Read the requirements.txt to see what resources were made use of, and you can ru
 
 Complete installation instructions:
 
-_**git clone https://github.com/mdcue/siphon.git
-   cd siphon
-   pip install -r requirements.txt
-   streamlit run app.py**_
+_git clone https://github.com/mdcue/siphon.git_
+
+_cd siphon_
+   
+_pip install -r requirements.txt_
+
+_streamlit run app.py_

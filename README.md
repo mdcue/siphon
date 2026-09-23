@@ -13,4 +13,4 @@ _cd siphon_
    
 _pip install -r requirements.txt_
 
-_streamlit run app.py_
+**Run this command in the terminal after setting everything up: **_streamlit run app.py_

@@ -1,9 +1,5 @@
-requirements = [ streamlit>=1.57.0,
-pandas>=2.2.0,
-requests>=2.32.0,
-beautifulsoup4>=4.12.0,
-openpyxl>=3.1.0]
-
-For easier installation, use this command in the command prompt:
-
-pip install streamlit pandas requests beautifulsoup4 openpyxl
+streamlit
+pandas
+requests
+beautifulsoup4
+openpyxl

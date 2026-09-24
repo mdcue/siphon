@@ -3,8 +3,8 @@ import io
 import pandas as pd
 from webScrapper import table_scraping, clean_dataframe
 
-st.title("*<siphon>*")
-st.header("_~a simple python based web scraper-_")
+st.title("*<siphon.>*")
+st.header("_A simple python based web scraper._")
 
 url = st.text_input("Enter the URL of the website to scrape: ")
 file_format = st.selectbox("Output format: ", [".csv(Comma-Separated Values)", ".xlsx(Excel Sheet)"])

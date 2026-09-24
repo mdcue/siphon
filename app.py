@@ -20,7 +20,6 @@ if st.button("Scrape"):
         except ValueError as e:
             st.error(str(e))
         #to catch the any other error raised in the table_scraping function (bad URL, network issues, etc.)
-                
         except Exception as e:
             st.error(f"Failed to fetch page: {e}")
         else:
@@ -34,7 +33,9 @@ if st.button("Scrape"):
                 st.dataframe(df)
             
             if file_format == ".csv(Comma-Separated Values)":
+            
             #CSVs hold only one table per file, so there will be a button for each table to download
+            
                 for i, df in enumerate(tables, start = 1):
                     st.download_button(
                         label = f"Download Table {i} as CSV.",
@@ -46,7 +47,10 @@ if st.button("Scrape"):
             
             else:
                 buffer = io.BytesIO()
-                #Excel files can hold multiple tables in different sheets, so we will create a single Excel file with each table in a separate sheet for more efficiency
+                
+                #Excel files can hold multiple tables in different sheets,
+                #so we will create a single Excel file with each table in a separate sheet for more efficiency
+                
                 with pd.ExcelWriter(buffer, engine = "openpyxl") as writer:
                     for i, df in enumerate(tables, start = 1):
                         df.to_excel(writer, index = False, sheet_name = f"Table_{i}")

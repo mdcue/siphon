@@ -18,10 +18,10 @@ from typing import TYPE_CHECKING
 
 from bs4 import BeautifulSoup
 
-from siphon.core.models import Table
+from siphon_app.core.models import Table
 
 if TYPE_CHECKING:
-    from siphon.core.fetcher import FetchedPage
+    from siphon_app.core.fetcher import FetchedPage
 
 #lxml copes with tables whose closing </td> or </tr> tags are left out (legal
 # HTML, common on older sites). Python's built-in "html.parser" nests those cells
@@ -381,7 +381,7 @@ if __name__ == "__main__":
     import sys
     from pathlib import Path
     
-    from siphon.core.fetcher import FetchError, fetch
+    from siphon_app.core.fetcher import FetchError, fetch
     
     sys.stdout.reconfigure(errors = "replace")
     for source in sys.argv[1:]:

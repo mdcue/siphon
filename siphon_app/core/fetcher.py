@@ -17,7 +17,7 @@ from urllib3.exceptions import DecodeError, ProtocolError, ReadTimeoutError
 from urllib3.exceptions import SSLError as Urllib3SSLError
 from urllib3.util.retry import Retry
 
-from siphon import __version__
+from siphon_app import __version__
 
 #limits
 CONNECT_TIMEOUT = 5

@@ -32,7 +32,7 @@ class FetchError(Exception):
     """A download problem. str(error) is always safe to show to the user."""
 
 class FetchCancelled(FetchError):
-    """The user pressed cancel. Not really and error, so the GUI can tell it apart."""
+    """The user pressed cancel. Not really an error, so the GUI can tell it apart."""
 
 @dataclass
 class FetchedPage:
@@ -51,14 +51,14 @@ def normalize_url(raw: str) -> str:
         #"'localhost:8000" is fine: a digit follows the colon
         if re.match(r"^[A-Za-z][A-Za-z0-9+.\-]*:(?!\d)", text):
             raise FetchError("Only http and https addresses are supported.")
-        text = "http://" + text
+        text = "https://" + text
     
     try:
         parsed = urlparse(text)
         host = parsed.hostname
         _ = parsed.port #this will raise ValueError if the port isn't a number
     except ValueError:
-        raise FetchError("That doesn't look like a web address.")
+        raise FetchError("That doesn't look like a web address.") from None
     
     if parsed.scheme not in ("http", "https"):
         raise FetchError("Only http and https addresses are supported.")
@@ -116,14 +116,14 @@ def _check_cancel(cancel_event: threading.Event | None) -> None:
 
 def _too_big() -> FetchError:
     return FetchError(
-        f"That page is bigger that {MAX_BYTES // (1024 * 1024)} MB,"
-        "which is more that siphon will download."
+        f"That page is bigger than {MAX_BYTES // (1024 * 1024)} MB,"
+        "which is more than siphon will download."
     )
 
 def _chunks(response):
     """Yield the page body in pieces, handing over whatever has arrived so far.
     
-    iter_content() would wait for a whole chunk, so a slow server could help us
+    iter_content() would wait for a whole chunk, so a slow server could keep us
     stuck for a long time without ever reaching our cancel and time checks.
     read1() returns as soon as *some* bytes are there, so those checks run often.
     """
@@ -148,7 +148,7 @@ def _chunks(response):
 
 def _status_message(code: int, host: str) -> str:
     known = {
-        400: "The site didn't understand the requests (400).",
+        400: "The site didn't understand the request (400).",
         401: "That page needs a login (401), which siphon can't do.",
         403: f"{host} refused access (403). It may block scrapers or require login.",
         404: "Page not found (404). Check the address.",
@@ -193,7 +193,7 @@ def _download(session, url, host, timeout, cancel_event) -> FetchedPage:
     except requests.exceptions.Timeout:
         raise FetchError(f"{host} took too long to send the page.") from None
     except requests.exceptions.SSLError:
-        raise FetchError(f"The site's security certificate couldn't be verified, so I did'nt connect.") from None
+        raise FetchError(f"The site's security certificate couldn't be verified, so I didn't connect.") from None
     except requests.exceptions.TooManyRedirects:
         raise FetchError("The site keeps redirecting in a loop.") from None
     except (requests.exceptions.InvalidURL, requests.exceptions.InvalidSchema,

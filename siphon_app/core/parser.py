@@ -1,5 +1,5 @@
 """
-siphon/core/parser.py
+siphon_app/core/parser.py
 
 Turns a page's HTML into a list of Table objects.
 

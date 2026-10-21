@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from siphon_app.core.models import Cell, Table
 
-NUMERIC_SHARE = 0.8     # a column is numeric if this share of its non-empty cells parse
+NUMERIC_SHARE = 0.8 # a column is numeric if this share of its non-empty cells parse
 
 _CURRENCY = r"(?:[$\u20ac\u00a3\u00a5\u20b9]|Rs\.?)"
 _SUFFIX = {"k": 10**3, "m": 10**6, "b": 10**9, "t": 10**12}

@@ -1,5 +1,5 @@
 """
-siphon/core/fetcher.py
+siphon_app/core/fetcher.py
 
 Downloads a webpage safely: tidy address, timeouts, a few retries,
 size and time limits, cancel support, and plain-English error messages.

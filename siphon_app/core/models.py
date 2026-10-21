@@ -1,5 +1,5 @@
 """
-siphon/core/models.py
+siphon_app/core/models.py
 
 The one data structure the whole app passes around: a Table.
 """

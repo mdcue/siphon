@@ -5,11 +5,14 @@ The one data structure the whole app passes around: a Table.
 """
 from dataclasses import dataclass, field
 
+# A cell is text straight from the page, or a number once the cleaner has converted it.
+Cell = str | int | float
+
 @dataclass
 class Table:
     name: str
     headers: list[str]  #column names
-    rows: list[list[str]] #every row will have exactly len(headers) cells
+    rows: list[list[Cell]] #every row will have exactly len(headers) cells
     source_url: str = "" #the source of the table
     warnings: list[str] = field(default_factory = list)
     is_layout: bool = False #this is the parser's guess, probably page layout, not data

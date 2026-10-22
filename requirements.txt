@@ -2,5 +2,5 @@ requests
 beautifulsoup4
 lxml
 openpyxl
-ttkbootstrap
+ttkbootstrap>=2.2
 platformdirs

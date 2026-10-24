@@ -11,10 +11,10 @@ from urllib.parse import urlparse
 
 import ttkbootstrap as ttk
 
-# [CHANGED] now also imports the real download and the parser
 from siphon_app.core.fetcher import FetchCancelled, FetchError, fetch, normalize_url
 from siphon_app.core.models import Table
 from siphon_app.core.parser import parse_page
+from siphon_app.gui.table_view import TableView
 
 LIGHT_THEME = "bootstrap-light"  # ttkbootstrap 2.x ships matching -light / -dark pairs
 PAD = 12 # space around things, in pixels
@@ -88,15 +88,12 @@ class SiphonApp(ttk.Window):
         self.theme_button.grid(row=0, column=4, padx=(8, 0))
 
     def _build_content(self) -> None:
-        # The middle area. The table list and preview replace this placeholder in Step 8.
         self.content = ttk.Frame(self, padding=PAD)
         self.content.grid(row=1, column=0, sticky="nsew")
         self.content.columnconfigure(0, weight=1)
         self.content.rowconfigure(0, weight=1)
-        # [CHANGED] kept in self.content_label so we can show what was found
-        self.content_label = ttk.Label(self.content, text="Tables will show up here.",
-                                    bootstyle="secondary", anchor="center", justify="center")
-        self.content_label.grid(row=0, column=0, sticky="nsew")
+        self.table_view = TableView(self.content, notify=self.set_status)
+        self.table_view.grid(row=0, column=0, sticky="nsew")
 
     def _build_status_bar(self) -> None:
         ttk.Separator(self).grid(row=2, column=0, sticky="ew")
@@ -193,21 +190,18 @@ class SiphonApp(ttk.Window):
         self.set_status("Cancelled.")
 
     def _show_tables(self, tables: list[Table]) -> None:
-        # A plain text summary for now. Step 8 replaces it with the table list and preview.
         self.tables = tables
         if not tables:
-            self.content_label.configure(text="No tables found on that page.")
+            self.table_view.set_tables([], "No tables found on that page.")
             self.set_status("No tables found on that page. It may load its data with JavaScript.")
             return
-        lines = []
-        for table in tables:
-            line = f"{table.name}    {table.n_rows} rows \u00d7 {table.n_cols} columns"
-            if table.is_layout:
-                line += "    (probably page layout)"
-            lines.append(line)
-        self.content_label.configure(text="\n".join(lines))
+        self.table_view.set_tables(tables)
         word = "table" if len(tables) == 1 else "tables"
-        self.set_status(f"Found {len(tables)} {word}.")
+        text = f"Found {len(tables)} {word}"
+        layout = sum(1 for table in tables if table.is_layout)
+        if layout:
+            text += f" ({layout} look{'s' if layout == 1 else ''} like page layout)"
+        self.set_status(text + ".")
 
     def on_close(self) -> None:
         if self._cancel_event is not None:

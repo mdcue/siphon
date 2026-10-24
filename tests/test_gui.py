@@ -4,22 +4,12 @@ import time
 
 import pytest
 
-tk = pytest.importorskip("tkinter")
+pytest.importorskip("tkinter")
 
 from siphon_app.core.fetcher import FetchCancelled, FetchedPage, FetchError
 from siphon_app.core.models import Table
 from siphon_app.gui import app as app_module
 from siphon_app.gui.app import LIGHT_THEME, READY_TEXT, SiphonApp
-
-@pytest.fixture(scope="module")
-def app():
-    try:
-        window = SiphonApp()
-    except tk.TclError:
-        pytest.skip("no display available")
-    window.withdraw() # don't flash a window during the tests
-    yield window
-    window.destroy()
 
 #helpers
 PAGE = FetchedPage(url="https://example.com/data", content=b"<html></html>", content_type="text/html")
@@ -88,16 +78,17 @@ def test_a_good_address_is_tidied_and_downloaded(app, monkeypatch):
     assert app.tables == tables
     assert app.status_var.get() == "Found 1 table."
     assert not app.status_is_error
-    assert "Prices" in app.content_label.cget("text") and "2 rows" in app.content_label.cget("text")
+    assert app.table_view.name_label.cget("text") == "Prices"
+    assert "2 rows" in app.table_view.size_label.cget("text")
 
 def test_several_tables_and_layout_tables_are_described(app, monkeypatch):
     tables = [Table("Sales", ["A", "B"], [["1", "2"]]),
             Table("Menu", ["A"], [["x"]], is_layout=True)]
     run_fetch(app, monkeypatch, parse=lambda page: tables)
     wait_until_idle(app)
-    assert app.status_var.get() == "Found 2 tables."
-    text = app.content_label.cget("text")
-    assert "Sales" in text and "Menu" in text and "probably page layout" in text
+    assert app.status_var.get() == "Found 2 tables (1 looks like page layout)."
+    listed = [app.table_view.table_list.set(i, "name") for i in app.table_view.table_list.get_children()]
+    assert listed == ["Sales"] 
 
 def test_the_window_stays_responsive_and_locks_the_buttons_while_downloading(app, monkeypatch):
     started, gate = threading.Event(), threading.Event()
@@ -188,7 +179,8 @@ def test_a_page_without_tables_says_so_and_clears_the_old_list(app, monkeypatch)
     assert app.tables == []
     assert "No tables found" in app.status_var.get()
     assert not app.status_is_error
-    assert "Old" not in app.content_label.cget("text")
+    assert app.table_view.checked_tables() == []
+    assert app.table_view.placeholder.cget("text") == "No tables found on that page."
 
 def test_a_new_download_works_after_an_error(app, monkeypatch):
     run_fetch(app, monkeypatch, fetch=lambda u, cancel_event=None: (_ for _ in ()).throw(FetchError("nope")))
@@ -222,7 +214,7 @@ def test_an_answer_from_a_cancelled_job_cannot_leak_into_the_next_one(app, monke
     release_new.set()
     wait_until_idle(app)
     assert [t.name for t in app.tables] == ["Fresh"]
-    assert "Stale" not in app.content_label.cget("text")
+    assert app.table_view.name_label.cget("text") == "Fresh"
 
 def test_run_job_reports_cancelled_if_the_stop_signal_came_while_the_page_arrived(monkeypatch):
     import queue

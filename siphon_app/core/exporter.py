@@ -79,7 +79,7 @@ def _os_problem(error: OSError, path: Path) -> ExportError:
 
 def free_path(folder: Path, name: str, extension: str) -> Path:
     """folder/name.csv, or 'name (2).csv' if that exists: never overwrite someone's file."""
-    path = free_path(folder, name, ".csv")
+    path = folder / f"{name}{extension}"
     count = 1
     while path.exists():
         count += 1
@@ -119,7 +119,7 @@ def export_csv(tables: list[Table], folder: str | Path, *, protect_formulas: boo
     names = _make_unique([safe_filename(t.name) for t in tables], MAX_NAME)
     paths = []
     for table, name in zip(tables, names):
-        path = _free_path(folder, name, ".csv")
+        path = free_path(folder, name, ".csv")
         convert = _protect if protect_formulas else (lambda cell: cell)
         try:
             with open(path, "w", encoding="utf-8-sig", newline="") as handle:

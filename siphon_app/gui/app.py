@@ -14,6 +14,9 @@ import ttkbootstrap as ttk
 from siphon_app.core.fetcher import FetchCancelled, FetchError, fetch, normalize_url
 from siphon_app.core.models import Table
 from siphon_app.core.parser import parse_page
+from siphon_app.core.pipeline import clean_all, summarize
+from siphon_app.gui.export_bar import ExportBar
+from siphon_app.gui.table_view import TableView
 from siphon_app.gui.table_view import TableView
 
 LIGHT_THEME = "bootstrap-light"  # ttkbootstrap 2.x ships matching -light / -dark pairs
@@ -28,7 +31,8 @@ def run_job(results: queue.Queue, job_id: int, url: str, cancel_event: threading
         if cancel_event.is_set(): # cancelled while the page was arriving
             raise FetchCancelled("Cancelled.")
         tables = parse_page(page)
-        message = ("done", job_id, tables)
+        cleaned = clean_all(tables)
+        message = ("done", job_id, tables, cleaned)
     except FetchCancelled:
         message = ("cancelled", job_id)
     except FetchError as error: # friendly, already worded for the user
@@ -47,6 +51,8 @@ class SiphonApp(ttk.Window):
         self.status_is_error = False
 
         self.tables: list[Table] = [] # what the last successful fetch found
+        self.cleaned_tables: list[Table] = [] # the same tables with numbers converted
+        self.clean_summary = ""
         self.busy = False # True while a download is running
         self._results: queue.Queue = queue.Queue() # worker -> window messages
         self._cancel_event: threading.Event | None = None
@@ -94,6 +100,10 @@ class SiphonApp(ttk.Window):
         self.content.rowconfigure(0, weight=1)
         self.table_view = TableView(self.content, notify=self.set_status)
         self.table_view.grid(row=0, column=0, sticky="nsew")
+        self.export_bar = ExportBar(self.content, get_tables=self.table_view.checked_tables,
+                                    notify=self.set_status, on_clean_change=self._on_clean_change)
+        self.export_bar.grid(row=1, column=0, sticky="ew", pady=(PAD, 0))
+        self.table_view.on_change = self.export_bar.refresh
 
     def _build_status_bar(self) -> None:
         ttk.Separator(self).grid(row=2, column=0, sticky="ew")
@@ -175,7 +185,7 @@ class SiphonApp(ttk.Window):
             return
         self._set_busy(False)
         if kind == "done":
-            self._show_tables(message[2])
+            self._show_tables(message[2], message[3])
         elif kind == "error":
             self.set_status(message[2], error=True)
         else: # "cancelled"
@@ -189,13 +199,24 @@ class SiphonApp(ttk.Window):
         self._set_busy(False) # and the window is free again straight away
         self.set_status("Cancelled.")
 
-    def _show_tables(self, tables: list[Table]) -> None:
+    def _on_clean_change(self, clean: bool) -> None:
+        """[NEW] The "Clean numbers" box was ticked or unticked: flip the preview and the export."""
+        if self.tables:
+            self.table_view.swap_tables(self.cleaned_tables if clean else self.tables)
+        self.export_bar.set_clean_text(self.clean_summary if clean and self.tables else None)
+
+    def _show_tables(self, tables: list[Table], cleaned: list) -> None:
         self.tables = tables
+        self.cleaned_tables = [table for table, report in cleaned]
+        self.clean_summary = summarize([report for table, report in cleaned])
         if not tables:
             self.table_view.set_tables([], "No tables found on that page.")
+            self.export_bar.set_clean_text()
             self.set_status("No tables found on that page. It may load its data with JavaScript.")
             return
-        self.table_view.set_tables(tables)
+        clean = self.export_bar.clean_var.get()
+        self.table_view.set_tables(self.cleaned_tables if clean else tables)
+        self.export_bar.set_clean_text(self.clean_summary if clean else None)
         word = "table" if len(tables) == 1 else "tables"
         text = f"Found {len(tables)} {word}"
         layout = sum(1 for table in tables if table.is_layout)

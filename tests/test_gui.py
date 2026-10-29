@@ -238,3 +238,161 @@ def test_cancel_tells_the_worker_to_stop(app, monkeypatch):
     assert not seen["event"].is_set()
     app.on_cancel()
     assert seen["event"].is_set()
+
+import csv
+
+from siphon_app.gui.export_bar import CLEAN_OFF_TEXT
+
+def prices():
+    return [Table("Prices", ["Name", "Price"], [["Alpha", "$1,234"], ["Beta", "$5"]],
+                source_url="https://example.com/data")]
+
+def preview_rows(app):
+    view = app.table_view.preview
+    return [[str(v) for v in view.item(i, "values")] for i in view.get_children()]
+
+def wait_for_export(app, timeout=5.0):
+    end = time.time() + timeout
+    while app.export_bar.busy and time.time() < end:
+        app.update()
+        time.sleep(0.01)
+    app.update()
+    assert not app.export_bar.busy, "the export never finished"
+
+def read_csv(path):
+    with open(path, encoding="utf-8-sig", newline="") as handle:
+        return list(csv.reader(handle))
+
+@pytest.fixture(autouse=True)
+def reset_export_bar(app):
+    """The window is shared by every test, so put the export controls back afterwards."""
+    yield
+    app.export_bar.clean_var.set(True)
+    app.export_bar.format_var.set("csv")
+
+def test_numbers_are_cleaned_by_default_and_the_box_flips_between_before_and_after(app, monkeypatch):
+    run_fetch(app, monkeypatch, parse=lambda page: prices())
+    wait_until_idle(app)
+    assert app.export_bar.clean_var.get() is True
+    assert preview_rows(app) == [["Alpha", "1234"], ["Beta", "5"]] # after
+    assert "Turned 2 cells in 1 column into numbers." in app.export_bar.clean_label.cget("text")
+
+    app.export_bar.clean_var.set(False)
+    app.export_bar._on_clean()
+    assert preview_rows(app) == [["Alpha", "$1,234"], ["Beta", "$5"]] # before
+    assert app.export_bar.clean_label.cget("text") == CLEAN_OFF_TEXT
+
+    app.export_bar.clean_var.set(True)
+    app.export_bar._on_clean()
+    assert preview_rows(app) == [["Alpha", "1234"], ["Beta", "5"]]
+    assert "Turned 2 cells" in app.export_bar.clean_label.cget("text")
+
+def test_a_new_page_respects_the_clean_box_being_off(app, monkeypatch):
+    app.export_bar.clean_var.set(False)
+    run_fetch(app, monkeypatch, parse=lambda page: prices())
+    wait_until_idle(app)
+    assert preview_rows(app) == [["Alpha", "$1,234"], ["Beta", "$5"]]
+    assert app.export_bar.clean_label.cget("text") == CLEAN_OFF_TEXT
+
+def test_toggling_the_clean_box_keeps_the_ticks_and_the_chosen_table(app, monkeypatch):
+    tables = [Table("One", ["A"], [["$1"]]), Table("Two", ["A"], [["$2"]])]
+    run_fetch(app, monkeypatch, parse=lambda page: tables)
+    wait_until_idle(app)
+    app.table_view.toggle(0) # untick One
+    app.table_view.table_list.selection_set("1")
+    app.update()
+    app.export_bar.clean_var.set(False)
+    app.export_bar._on_clean()
+    assert app.table_view.name_label.cget("text") == "Two"
+    assert [t.name for t in app.table_view.checked_tables()] == ["Two"]
+    assert app.table_view.checked_tables()[0].rows == [["$2"]] # the original text
+
+def test_toggling_with_no_tables_is_harmless(app, monkeypatch):
+    run_fetch(app, monkeypatch, parse=lambda page: [])
+    wait_until_idle(app)
+    app.export_bar.clean_var.set(False)
+    app.export_bar._on_clean()
+    assert app.export_bar.clean_label.cget("text") == CLEAN_OFF_TEXT
+    app.export_bar.clean_var.set(True)
+    app.export_bar._on_clean()
+    assert "Numbers like" in app.export_bar.clean_label.cget("text")
+
+def test_cleaning_happens_on_the_worker_thread_not_in_the_window(app, monkeypatch):
+    seen = []
+    real = app_module.clean_all
+    monkeypatch.setattr(app_module, "clean_all",
+                        lambda tables: seen.append(threading.current_thread()) or real(tables))
+    run_fetch(app, monkeypatch, parse=lambda page: prices())
+    wait_until_idle(app)
+    assert seen and seen[0] is not threading.main_thread()
+
+def test_the_export_button_follows_the_ticks(app, monkeypatch):
+    tables = [Table("Sales", ["A"], [["1"]]), Table("Menu", ["A"], [["x"]], is_layout=True)]
+    run_fetch(app, monkeypatch, parse=lambda page: tables)
+    wait_until_idle(app)
+    assert app.export_bar.export_button.cget("text") == "Export 1 table"                 # layout is unticked
+    app.table_view.select_none()
+    assert app.export_bar.export_button.cget("text") == "Export"
+    assert str(app.export_bar.export_button.cget("state")) == "disabled"
+    app.table_view.select_all()
+    assert str(app.export_bar.export_button.cget("state")) == "normal"
+    app.table_view.hide_layout.set(False)
+    app.table_view._refresh_list()
+    app.table_view.select_all()
+    assert app.export_bar.export_button.cget("text") == "Export 2 tables"
+
+def test_the_export_button_is_off_when_a_page_has_no_tables(app, monkeypatch):
+    run_fetch(app, monkeypatch, parse=lambda page: prices())
+    wait_until_idle(app)
+    run_fetch(app, monkeypatch, parse=lambda page: [])
+    wait_until_idle(app)
+    assert str(app.export_bar.export_button.cget("state")) == "disabled"
+    assert app.export_bar.export_button.cget("text") == "Export"
+
+def test_exporting_from_the_window_saves_what_the_preview_shows(app, monkeypatch, tmp_path):
+    run_fetch(app, monkeypatch, parse=lambda page: prices())
+    wait_until_idle(app)
+    app.export_bar.folder_var.set(str(tmp_path))
+    app.export_bar.on_export()
+    wait_for_export(app)
+    assert app.status_var.get() == f"Saved Prices.csv to {tmp_path}."
+    assert not app.status_is_error
+    assert read_csv(tmp_path / "Prices.csv") == [["Name", "Price"], ["Alpha", "1234"], ["Beta", "5"]]
+
+    app.export_bar.clean_var.set(False) # now the untouched text
+    app.export_bar._on_clean()
+    app.export_bar.on_export()
+    wait_for_export(app)
+    assert read_csv(tmp_path / "Prices (2).csv")[1] == ["Alpha", "$1,234"]
+    assert read_csv(tmp_path / "Prices.csv")[1] == ["Alpha", "1234"] # the first file is safe
+
+def test_only_ticked_tables_are_exported(app, monkeypatch, tmp_path):
+    tables = [Table("One", ["A"], [["1"]]), Table("Two", ["A"], [["2"]]), Table("Three", ["A"], [["3"]])]
+    run_fetch(app, monkeypatch, parse=lambda page: tables)
+    wait_until_idle(app)
+    app.table_view.toggle(1) # untick Two
+    app.export_bar.folder_var.set(str(tmp_path))
+    app.export_bar.on_export()
+    wait_for_export(app)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["One.csv", "Three.csv"]
+    assert app.status_var.get() == f"Saved 2 files to {tmp_path}."
+
+def test_an_excel_export_from_the_window_has_real_numbers(app, monkeypatch, tmp_path):
+    from openpyxl import load_workbook
+    run_fetch(app, monkeypatch, parse=lambda page: prices())
+    wait_until_idle(app)
+    app.export_bar.format_var.set("xlsx")
+    app.export_bar.folder_var.set(str(tmp_path))
+    app.export_bar.on_export()
+    wait_for_export(app)
+    assert load_workbook(tmp_path / "Prices.xlsx")["Prices"]["B2"].value == 1234
+
+def test_a_failed_export_shows_in_red_in_the_status_bar(app, monkeypatch, tmp_path):
+    blocker = tmp_path / "file.txt"
+    blocker.write_text("hi")
+    run_fetch(app, monkeypatch, parse=lambda page: prices())
+    wait_until_idle(app)
+    app.export_bar.folder_var.set(str(blocker))
+    app.export_bar.on_export()
+    wait_for_export(app)
+    assert app.status_is_error and "Couldn't" in app.status_var.get()

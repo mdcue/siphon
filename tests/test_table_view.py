@@ -283,3 +283,61 @@ def test_a_table_with_no_rows_still_previews_its_headers(make_view):
     view = make_view([table("Empty", [], headers=("A", "B"))])
     assert shown(view) == [] and view.size_label.cget("text") == "0 rows \u00d7 2 columns"
     assert [view.preview.heading(c, "text") for c in view.preview["columns"]] == ["A", "B"]
+
+def test_swap_tables_shows_new_versions_but_keeps_ticks_selection_and_search(make_view):
+    a = table("A", [["x1", "$1"], ["x2", "$2"], ["y3", "$3"]])
+    b = table("B", [["z", "$9"]])
+    view = make_view([a, b])
+    view.table_list.selection_set("1")
+    view.update()
+    view.toggle(0)  # untick A
+    view.table_list.selection_set("0")
+    view.update()
+    view.search_var.set("x")
+    view._sort_by(0)
+    cleaned = [table("A", [["x1", 1], ["x2", 2], ["y3", 3]]), table("B", [["z", 9]])]
+    view.swap_tables(cleaned)
+    assert shown(view) == [["x1", "1"], ["x2", "2"]] # same search, same sort, new values
+    assert view.search_var.get() == "x" and view._sort_column == 0
+    assert view.table_list.selection() == ("0",)
+    assert view.checked_tables() == [cleaned[1]] # the tick on B survived; A stays unticked
+
+def test_copy_after_a_swap_copies_the_new_version(make_view):
+    view = make_view([table("A", [["x", "$1,000"]])])
+    view.swap_tables([table("A", [["x", 1000]])])
+    view.copy_table()
+    assert view.clipboard_get() == "Name\tPrice\nx\t1000\n"
+
+def test_swap_tables_needs_the_same_number_of_tables(make_view):
+    view = make_view([table("A", [["x", "1"]])])
+    with pytest.raises(ValueError):
+        view.swap_tables([])
+
+def test_swapping_with_nothing_selected_is_fine(make_view):
+    view = make_view()
+    view.swap_tables([])
+    assert view.checked_tables() == []
+
+def test_on_change_fires_when_ticks_or_tables_change(make_view):
+    a, b = table("A", [["x", "1"]]), table("B", [["y", "2"]], is_layout=True)
+    view = make_view()
+    calls = []
+    view.on_change = lambda: calls.append(1)
+    view.set_tables([a, b])
+    assert calls # new tables
+    calls.clear()
+    view.toggle(0)
+    assert calls
+    calls.clear()
+    view.select_none()
+    assert calls
+    calls.clear()
+    view.select_all()
+    assert calls
+    calls.clear()
+    view.hide_layout.set(False)
+    view._refresh_list()
+    assert calls
+    calls.clear()
+    view.set_tables([])
+    assert calls

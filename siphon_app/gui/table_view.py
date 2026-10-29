@@ -78,6 +78,7 @@ class TableView(ttk.Frame):
     def __init__(self, master, notify: Callable[[str], None] | None = None) -> None:
         super().__init__(master)
         self.notify = notify or (lambda text: None) # how we send a message to the status bar
+        self.on_change = lambda: None
 
         self._tables: list[Table] = []
         self._checked: set[int] = set() # indexes of the ticked tables
@@ -202,10 +203,24 @@ class TableView(ttk.Frame):
             self.list_title.configure(text="Tables found")
             self.hint_label.configure(text="")
             self._clear_preview()
+            self._clear_preview()
+            self.on_change()
             return
         self.main.tkraise()
         self._refresh_list()
 
+    def swap_tables(self, tables: list[Table]) -> None:
+        """
+        [NEW] Show different versions of the same tables (say, cleaned instead of original)
+        without losing the ticks, the selected table, the search or the sorting.
+        """
+        if len(tables) != len(self._tables):
+            raise ValueError("swap_tables needs the same number of tables as before.")
+        self._tables = list(tables)
+        if self._current is not None:
+            self._render_preview()
+        self.on_change()
+    
     def checked_tables(self) -> list[Table]:
         """The tables that are ticked and visible, in page order. (Step 9 exports these.)"""
         return [self._tables[i] for i in self._visible if i in self._checked]
@@ -258,6 +273,7 @@ class TableView(ttk.Frame):
         target = self._current if self._current is not None else (self._visible[0] if self._visible else None)
         if target is None:
             self._clear_preview()
+            self.on_change()
             return
         self.table_list.selection_set(str(target))
         self.table_list.focus(str(target))
@@ -265,11 +281,17 @@ class TableView(ttk.Frame):
             self._current = target
             self._reset_preview_controls()
         self._render_preview()
+        self._render_preview()
+        self.on_change()
 
     def _redraw_checks(self) -> None:
         for index in self._visible:
             glyph = CHECKED if index in self._checked else UNCHECKED
             self.table_list.set(str(index), "use", glyph)
+        for index in self._visible:                       # [UNCHANGED]
+            glyph = CHECKED if index in self._checked else UNCHECKED
+            self.table_list.set(str(index), "use", glyph)
+        self.on_change()
 
     def _on_list_select(self, event=None) -> None:
         selected = self.table_list.selection()

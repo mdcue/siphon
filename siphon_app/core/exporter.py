@@ -77,9 +77,9 @@ def _os_problem(error: OSError, path: Path) -> ExportError:
                         "(like Excel): close it and try again.")
     return ExportError(f"Couldn't write {path.name}: {error.strerror or error}.")
 
-def _free_path(folder: Path, name: str, extension: str) -> Path:
+def free_path(folder: Path, name: str, extension: str) -> Path:
     """folder/name.csv, or 'name (2).csv' if that exists: never overwrite someone's file."""
-    path = folder / f"{name}{extension}"
+    path = free_path(folder, name, ".csv")
     count = 1
     while path.exists():
         count += 1

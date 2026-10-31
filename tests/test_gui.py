@@ -648,3 +648,56 @@ def test_closing_the_window_saves_the_settings(app, own_settings, monkeypatch):
     app.export_bar.format_var.set("json")
     app.on_close()
     assert load_settings(own_settings).export_format == "json"
+
+def test_a_note_about_a_remembered_copy_is_added_to_the_status(app, monkeypatch, own_settings):
+    noted = FetchedPage(url="https://example.com/data", content=b"<html></html>", content_type="text/html",
+                        note="Used the copy from 40 seconds ago; the site wasn't contacted.")
+    run_fetch(app, monkeypatch, fetch=lambda u, cancel_event=None: noted, parse=lambda page: prices())
+    wait_until_idle(app)
+    text = app.status_var.get()
+    assert text.startswith("Found 1 table.") and text.endswith("the site wasn't contacted.")
+    assert not app.status_is_error
+
+def test_no_note_means_the_status_is_unchanged(app, monkeypatch, own_settings):
+    run_fetch(app, monkeypatch, parse=lambda page: prices())
+    wait_until_idle(app)
+    assert app.status_var.get() == "Found 1 table."
+
+def test_a_site_that_says_no_robots_shows_its_reason_in_red(app, monkeypatch, own_settings):
+    def refused(url, cancel_event=None):
+        raise FetchError("example.com asks robots not to read this page (robots.txt), so siphon didn't fetch it.")
+    run_fetch(app, monkeypatch, fetch=refused)
+    wait_until_idle(app)
+    assert app.status_is_error and "robots.txt" in app.status_var.get()
+    assert app.settings.recent_urls == []
+
+def test_reload_forgets_the_remembered_copy_first(app, monkeypatch, own_settings):
+    forgotten = []
+    monkeypatch.setattr(app_module, "forget", forgotten.append)
+    monkeypatch.setattr(app_module, "fetch", lambda u, cancel_event=None: PAGE)
+    monkeypatch.setattr(app_module, "parse_page", lambda page: [])
+    app.url_var.set("example.com/data")
+    app.on_fetch(fresh=True)
+    wait_until_idle(app)
+    assert forgotten == ["https://example.com/data"]
+
+def test_a_normal_fetch_keeps_the_remembered_copy(app, monkeypatch, own_settings):
+    forgotten = []
+    monkeypatch.setattr(app_module, "forget", forgotten.append)
+    run_fetch(app, monkeypatch)
+    wait_until_idle(app)
+    assert forgotten == []
+
+def test_reload_with_a_bad_address_forgets_nothing(app, monkeypatch):
+    forgotten = []
+    monkeypatch.setattr(app_module, "forget", forgotten.append)
+    app.url_var.set("mailto:someone@example.com")
+    app.on_fetch(fresh=True)
+    assert forgotten == [] and app.status_is_error and not app.busy
+
+def test_ctrl_r_is_bound_to_reload(app):
+    assert app.bind("<Control-r>")
+
+def test_the_window_downloads_through_the_polite_fetcher():
+    from siphon_app.core import polite
+    assert app_module.fetch is polite.polite_fetch

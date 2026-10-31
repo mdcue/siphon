@@ -17,7 +17,7 @@ from urllib3.exceptions import DecodeError, ProtocolError, ReadTimeoutError
 from urllib3.exceptions import SSLError as Urllib3SSLError
 from urllib3.util.retry import Retry
 
-from siphon_app import __version__
+from siphon_app import __url__, __version__
 
 #limits
 CONNECT_TIMEOUT = 5
@@ -39,6 +39,7 @@ class FetchedPage:
     url: str #this is the final address, after any redirects
     content: bytes #raw bytes; cause BeautifulSoup works out the encoding on its own
     content_type: str
+    note: str = ""
 
 
 def normalize_url(raw: str) -> str:
@@ -69,7 +70,7 @@ def normalize_url(raw: str) -> str:
 def make_session(user_agent: str | None = None) -> requests.Session:
     """A requests Session that retries temporary failures a couple of times."""
     session = requests.Session()
-    session.headers["User-Agent"] = user_agent or f"Mozilla/5.0 (compatible; siphon/{__version__})"
+    session.headers["User-Agent"] = user_agent or f"Mozilla/5.0 (compatible; siphon/{__version__}; +{__url__})"
     session.headers["Accept"] = "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8"
     
     retry = Retry(

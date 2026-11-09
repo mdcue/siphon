@@ -1,4 +1,3 @@
-# [NEW FILE] every line is new
 """
 siphon_app/core/polite.py
 
@@ -49,6 +48,8 @@ def age_text(seconds: float) -> str:
 
 
 class PoliteFetcher:
+    """Wraps fetcher.fetch with robots.txt checks, a delay per site and a small page cache."""
+
     def __init__(self, session=None, clock=time.monotonic, wait=default_wait) -> None:
         self.session = session or fetcher.make_session()
         self._clock = clock                           # tests swap these two for fakes,
@@ -89,6 +90,7 @@ class PoliteFetcher:
     # ---- the pause between requests --------------------------------------------------
 
     def _delay(self, rules: RobotFileParser | None) -> float:
+        """Seconds to leave between requests: our minimum, or the site's Crawl-delay (capped)."""
         asked = rules.crawl_delay(ROBOT_NAME) if rules is not None else None
         if asked is None:
             return MIN_DELAY
@@ -103,6 +105,7 @@ class PoliteFetcher:
             return slot - now
 
     def _pause(self, host: str, delay: float, cancel_event) -> None:
+        """Wait for our turn with this site (the wait can be cancelled)."""
         wait = self._reserve(host, delay)
         if wait > 0:
             self._wait(wait, cancel_event)
@@ -153,6 +156,7 @@ class PoliteFetcher:
     # ---- the memory of recent pages --------------------------------------------------
 
     def _cached(self, url: str) -> FetchedPage | None:
+        """A recent copy of the page (with a note saying so), or None if there isn't a fresh one."""
         with self._lock:
             entry = self._pages.get(url)
             if entry is None:
@@ -165,6 +169,7 @@ class PoliteFetcher:
                                           "Press Ctrl+R to download it again.")
 
     def _remember(self, url: str, page: FetchedPage) -> None:
+        """Keep the page for a while. Big pages are skipped, and the oldest copy is dropped when full."""
         if len(page.content) > CACHE_MAX_BYTES:
             return
         with self._lock:
@@ -181,6 +186,7 @@ _default_lock = threading.Lock()
 
 
 def _shared() -> PoliteFetcher:
+    """The one PoliteFetcher everybody uses, made on first use (so delays and cache are shared)."""
     global _default
     with _default_lock:
         if _default is None:
@@ -194,4 +200,5 @@ def polite_fetch(url: str, cancel_event: threading.Event | None = None) -> Fetch
 
 
 def forget(url: str) -> None:
+    """Drop the remembered copy of a page (Ctrl+R uses this)."""
     _shared().forget(url)

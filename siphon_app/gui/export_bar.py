@@ -1,9 +1,4 @@
-"""
-siphon_app/gui/export_bar.py
-
-The strip under the table preview: pick a format, tick "Clean numbers", choose a folder
-and press Export. Saving runs on a background thread so a big Excel file never freezes the window.
-"""
+"""The strip under the preview for choosing a format and folder, then exporting."""
 import os
 import queue
 import subprocess
@@ -19,18 +14,16 @@ from siphon_app.core.exporter import ExportError
 from siphon_app.core.models import Table
 from siphon_app.core.pipeline import FORMAT_HINTS, FORMATS, describe, export_tables
 
-POLL_MS = 50                  # how often we check the worker for news
+POLL_MS = 50 # how often we check the worker for news
 CLEAN_ON_TEXT = "Numbers like $1,234 or 12% are saved as real numbers."
 CLEAN_OFF_TEXT = "Showing and saving the text exactly as it is on the page."
 
-
-# ---- helpers that need no window ---------------------------------------------------------
+# helpers that need no window
 
 def default_folder() -> str:
     """The Downloads folder if there is one, otherwise the home folder."""
     downloads = Path.home() / "Downloads"
     return str(downloads if downloads.is_dir() else Path.home())
-
 
 def export_label(count: int) -> str:
     """Text for the Export button: 'Export', 'Export 1 table', 'Export 3 tables'."""
@@ -38,49 +31,45 @@ def export_label(count: int) -> str:
         return "Export"
     return f"Export {count} {'table' if count == 1 else 'tables'}"
 
-
 def open_folder(folder: str | Path) -> None:
     """Show a folder in Explorer (or Finder / the file manager on other systems)."""
     if sys.platform == "win32":
-        os.startfile(folder)                              # noqa: S606  (Windows only)
+        os.startfile(folder) # noqa: S606 (Windows only)
     elif sys.platform == "darwin":
         subprocess.Popen(["open", str(folder)])
     else:
         subprocess.Popen(["xdg-open", str(folder)])
 
-
-# Runs on a worker thread. Like run_job in app.py it must NEVER touch a widget:
-# its only way to talk back is the queue.
+# runs on a worker thread: never touch widgets, use the queue
 def run_export(results: queue.Queue, tables: list[Table], fmt: str, folder: str) -> None:
     """Save the tables and put ('saved', paths) or ('error', text) on the queue."""
     try:
         results.put(("saved", export_tables(tables, fmt, folder)))
-    except ExportError as error:                          # already worded for the user
+    except ExportError as error: # already worded for the user
         results.put(("error", str(error)))
-    except Exception as error:                            # a bug: still tell the user, never hang
+    except Exception as error: # a bug: still tell the user, never hang
         results.put(("error", f"Something went wrong while saving ({type(error).__name__})."))
 
-
-# ---- the widget --------------------------------------------------------------------------
+# the widget
 
 class ExportBar(ttk.Frame):
-    """The export strip. The window gives it callbacks, so it never has to know about the window."""
+    """The export strip."""
 
     def __init__(self, master, get_tables: Callable[[], list[Table]],
                  notify: Callable[..., None] | None = None,
                  on_clean_change: Callable[[bool], None] | None = None,
                  on_saved: Callable[[], None] | None = None) -> None:
         super().__init__(master)
-        self.get_tables = get_tables                      # what to export: the ticked tables
+        self.get_tables = get_tables # what to export: the ticked tables
         self.notify = notify or (lambda text, error=False: None)
         self.on_clean_change = on_clean_change or (lambda clean: None)
-        self.on_saved = on_saved or (lambda: None)        # called after a successful save
+        self.on_saved = on_saved or (lambda: None) # called after a successful save
 
         self.format_var = ttk.StringVar(value="csv")
         self.clean_var = ttk.BooleanVar(value=True)
         self.folder_var = ttk.StringVar(value=default_folder())
-        self.busy = False                                 # True while a save is running
-        self.last_folder: Path | None = None              # set after a successful export
+        self.busy = False # True while a save is running
+        self.last_folder: Path | None = None # set after a successful export
         self._results: queue.Queue = queue.Queue()
         self._poll_id = None
 
@@ -126,17 +115,17 @@ class ExportBar(ttk.Frame):
                                       command=self.on_open, state="disabled")
         self.open_button.pack(side="left", padx=(8, 0))
 
-    # ---- keeping the controls in step ------------------------------------------------
+    # keeping the controls in step
 
     def refresh(self) -> None:
-        """Call whenever the ticked tables change: updates the Export button's text and state."""
+        """Update the Export button for the ticked tables."""
         count = len(self.get_tables())
         self.export_button.configure(text=export_label(count),
                                      state="normal" if count and not self.busy else "disabled")
         self.format_hint.configure(text=FORMAT_HINTS[self.format_var.get()])
 
     def set_clean_text(self, text: str | None = None) -> None:
-        """Say what cleaning did (or didn't). With no text, show the standard line for the checkbox."""
+        """Say what cleaning did (or didn't)."""
         if text is None:
             text = CLEAN_ON_TEXT if self.clean_var.get() else CLEAN_OFF_TEXT
         self.clean_label.configure(text=text)
@@ -149,13 +138,13 @@ class ExportBar(ttk.Frame):
         """Tell the window the box changed so it can swap the preview."""
         self.on_clean_change(self.clean_var.get())
 
-    # ---- actions ---------------------------------------------------------------------
+    # actions
 
     def browse(self) -> None:
         """Let the person pick the save folder."""
         chosen = filedialog.askdirectory(parent=self, initialdir=self.folder_var.get() or None,
                                          title="Choose where to save")
-        if chosen:                                        # empty if the person pressed Cancel
+        if chosen: # empty if the person pressed Cancel
             self.folder_var.set(os.path.normpath(chosen))
 
     def on_export(self) -> None:
@@ -170,7 +159,7 @@ class ExportBar(ttk.Frame):
         self.refresh()
         self.notify("Saving ...")
         threading.Thread(target=run_export, args=(self._results, tables, self.format_var.get(),
-                                                  self.folder_var.get()), daemon=True).start()   # daemon: it can't keep the program alive
+                                                  self.folder_var.get()), daemon=True).start() # daemon: it can't keep the program alive
         self._schedule_poll()
 
     def on_open(self) -> None:
@@ -182,7 +171,7 @@ class ExportBar(ttk.Frame):
         except OSError:
             self.notify(f"Couldn't open {self.last_folder}.", error=True)
 
-    # ---- hearing back from the worker ------------------------------------------------
+    # hearing back from the worker
 
     def _schedule_poll(self) -> None:
         """Check the queue again in a moment (never two timers at once)."""
@@ -191,19 +180,19 @@ class ExportBar(ttk.Frame):
         self._poll_id = self.after(POLL_MS, self._poll)
 
     def _poll(self) -> None:
-        """Runs on the window thread: see if the worker has finished and show the result."""
+        """Check if the worker has finished and show the result."""
         self._poll_id = None
         try:
             kind, payload = self._results.get_nowait()
         except queue.Empty:
-            self._schedule_poll()                         # not finished yet: look again shortly
+            self._schedule_poll() # not finished yet: look again shortly
             return
         self.busy = False
         if kind == "saved":
             self.last_folder = payload[0].parent
             self.open_button.configure(state="normal")
             self.notify(describe(payload))
-            self.on_saved()                               # lets the window remember the folder and format
+            self.on_saved() # lets the window remember the folder and format
         else:
             self.notify(payload, error=True)
         self.refresh()

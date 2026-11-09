@@ -1,4 +1,3 @@
-# [NEW FILE] every line is new
 # Tests for siphon_app/core/columns.py: hiding and renaming columns on a copy.
 import pytest
 

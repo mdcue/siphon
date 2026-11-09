@@ -23,7 +23,7 @@ FORMAT_HINTS = {
 
 
 def clean_all(tables: list[Table]) -> list[tuple[Table, CleanReport]]:
-    """Clean every table. Slow on big tables (about 1.5 s for 30,000 rows), so run it on the worker."""
+    """Clean every table. Slow on big tables (about 1.5 s for 30,000 rows), so call it from the worker thread."""
     return [clean_table(table) for table in tables]
 
 

@@ -1,4 +1,4 @@
-"""Tests for siphon_app/core/pipeline.py. Nothing here needs a screen."""
+"""Tests for siphon_app/core/pipeline.py."""
 import csv
 import json
 from pathlib import Path
@@ -13,13 +13,11 @@ from siphon_app.core.pipeline import (
     FORMATS, base_name, clean_all, describe, export_tables, summarize,
 )
 
-
 # build a small test table
 def table(name="Prices", rows=(("Alpha", "$1,234"), ("Beta", "$5")), url="https://example.com/p"):
     return Table(name, ["Name", "Price"], [list(r) for r in rows], source_url=url)
 
-
-# -- cleaning
+# cleaning
 
 # every table comes back cleaned, with its own report
 def test_clean_all_returns_a_cleaned_copy_and_a_report_for_each_table():
@@ -29,57 +27,48 @@ def test_clean_all_returns_a_cleaned_copy_and_a_report_for_each_table():
     cleaned, report = result[0]
     assert cleaned.rows == [["Alpha", 1234], ["Beta", 5]]
     assert report.cells_converted == 2
-    assert original.rows[0][1] == "$1,234"                    # the original is untouched
-
+    assert original.rows[0][1] == "$1,234" # the original is untouched
 
 # no tables in, no results out
 def test_clean_all_of_nothing_is_nothing():
     assert clean_all([]) == []
-
 
 # build a fake cleaning report
 def report(columns=0, converted=0, kept=0):
     return CleanReport([ColumnReport(name=f"c{i}", converted=converted // max(columns, 1),
                                      kept_as_text=kept if i == 0 else 0) for i in range(columns)])
 
-
 # the summary says so when nothing was converted
 def test_summarize_with_no_number_columns():
     assert summarize([]) == "No number columns found, so nothing needed converting."
     assert summarize([CleanReport(), CleanReport()]) == "No number columns found, so nothing needed converting."
-
 
 # counts add up across tables, with 1 cell vs 2 cells wording
 def test_summarize_counts_across_all_tables_and_uses_the_right_plurals():
     assert summarize([report(1, 1)]) == "Turned 1 cells in 1 column into numbers."
     assert summarize([report(2, 2000), report(1, 1000)]) == "Turned 3,000 cells in 3 columns into numbers."
 
-
 # leftover text cells are mentioned
 def test_summarize_mentions_cells_that_stayed_as_text():
     assert summarize([report(1, 10, kept=1)]).endswith("1 cell didn't look like numbers and stayed as text.")
     assert "12 cells didn't look like numbers" in summarize([report(1, 10, kept=12)])
 
-
-# -- file names
+# file names
 
 # one table: its own name, made safe
 def test_base_name_for_one_table_is_its_name_made_safe():
     assert base_name([table("Population: 2020/21?")]) == "Population 2020 21"
 
-
 # several tables: named after the site
 def test_base_name_for_several_tables_is_the_site():
     assert base_name([table("A"), table("B")]) == "tables from example.com"
 
-
 # no usable site: just 'tables'
 def test_base_name_without_a_site_falls_back():
     assert base_name([table("A", url=""), table("B", url="")]) == "tables"
-    assert base_name([table("A", url="not a url"), table("B")]) == "tables"      # no site name in it
+    assert base_name([table("A", url="not a url"), table("B")]) == "tables" # no site name in it
 
-
-# -- exporting
+# exporting
 
 # CSV gives one file per table
 def test_csv_writes_one_file_per_table(tmp_path):
@@ -88,7 +77,6 @@ def test_csv_writes_one_file_per_table(tmp_path):
     with open(paths[0], encoding="utf-8-sig", newline="") as handle:
         assert list(csv.reader(handle)) == [["Name", "Price"], ["Alpha", "$1,234"], ["Beta", "$5"]]
 
-
 # XLSX gives one workbook with a sheet per table
 def test_xlsx_writes_one_workbook_named_after_the_site(tmp_path):
     cleaned = [c for c, _ in clean_all([table("One"), table("Two")])]
@@ -96,8 +84,7 @@ def test_xlsx_writes_one_workbook_named_after_the_site(tmp_path):
     assert path.name == "tables from example.com.xlsx"
     book = load_workbook(path)
     assert book.sheetnames == ["One", "Two"]
-    assert book["One"]["B2"].value == 1234                    # a real number, not "$1,234"
-
+    assert book["One"]["B2"].value == 1234 # a real number, not "$1,234"
 
 # a lone table names the file after itself
 def test_a_single_table_gets_its_own_name_in_xlsx_and_json(tmp_path):
@@ -106,7 +93,6 @@ def test_a_single_table_gets_its_own_name_in_xlsx_and_json(tmp_path):
     assert (xlsx.name, js.name) == ("Prices.xlsx", "Prices.json")
     data = json.loads(js.read_text(encoding="utf-8"))
     assert data["tables"][0]["rows"][0] == {"Name": "Alpha", "Price": "$1,234"}
-
 
 # a second export gets (2), the first stays as it was
 @pytest.mark.parametrize("fmt, first, second", [
@@ -121,13 +107,11 @@ def test_exporting_twice_never_overwrites_the_first_file(tmp_path, fmt, first, s
     assert (one.name, two.name) == (first, second)
     assert one.read_bytes() == before
 
-
 # missing folders are created
 def test_the_folder_is_created_if_it_does_not_exist(tmp_path):
     target = tmp_path / "new" / "deeper"
     [path] = export_tables([table()], "json", str(target))
     assert path.parent == target and path.exists()
-
 
 # ~ means the home folder
 def test_a_home_folder_shortcut_is_understood(tmp_path, monkeypatch):
@@ -136,12 +120,10 @@ def test_a_home_folder_shortcut_is_understood(tmp_path, monkeypatch):
     [path] = export_tables([table()], "json", "~/out")
     assert path.parent == tmp_path / "out"
 
-
 # stray spaces around the folder are trimmed
 def test_spaces_around_the_folder_are_ignored(tmp_path):
     [path] = export_tables([table()], "json", f"  {tmp_path}  ")
     assert path.parent == tmp_path
-
 
 # empty input, unknown format or no folder all give a clear message
 @pytest.mark.parametrize("args, message", [
@@ -154,7 +136,6 @@ def test_bad_requests_give_a_friendly_error(args, message):
     with pytest.raises(ExportError, match=message):
         export_tables(*args)
 
-
 # a file where the folder should be is an error, not a crash
 def test_a_folder_that_is_really_a_file_is_a_friendly_error(tmp_path):
     blocker = tmp_path / "file.txt"
@@ -162,7 +143,6 @@ def test_a_folder_that_is_really_a_file_is_a_friendly_error(tmp_path):
     for fmt in FORMATS:
         with pytest.raises(ExportError):
             export_tables([table()], fmt, str(blocker))
-
 
 # the 'Saved ...' message for one file and for many
 def test_describe():

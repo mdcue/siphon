@@ -12,6 +12,7 @@ from siphon_app.core.fetcher import MAX_BYTES, FetchedPage, FetchError
 
 HTML_EXTENSIONS = (".html", ".htm", ".xhtml")
 
+
 def read_html_file(path: str | Path) -> FetchedPage:
     """Return the file as a FetchedPage, or raise FetchError with a message safe to show."""
     path = Path(path)
@@ -27,7 +28,7 @@ def read_html_file(path: str | Path) -> FetchedPage:
         if path.stat().st_size > MAX_BYTES:
             raise FetchError(limit_text)
         with open(path, "rb") as handle:
-            content = handle.read(MAX_BYTES + 1) # one extra byte shows if it grew while we read
+            content = handle.read(MAX_BYTES + 1)      # one extra byte tells us if the file grew while reading
     except PermissionError:
         raise FetchError("Couldn't read that file. It may be open in another program or protected.") from None
     except OSError as error:

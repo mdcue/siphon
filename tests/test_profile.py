@@ -1,4 +1,3 @@
-# [NEW FILE] every line is new
 # Tests for siphon_app/core/profile.py: the per-column summary.
 import pytest
 

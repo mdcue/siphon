@@ -1,7 +1,6 @@
 """Shared test setup: one main window for all the window tests."""
 import pytest
 
-
 # built once per run, because making a Tk window is slow
 @pytest.fixture(scope="session")
 def app(tmp_path_factory):
@@ -12,6 +11,6 @@ def app(tmp_path_factory):
         window = SiphonApp(tmp_path_factory.mktemp("settings") / "settings.json")
     except tk.TclError:
         pytest.skip("no display available")
-    window.withdraw()                                   # don't flash a window during the tests
+    window.withdraw() # don't flash a window during the tests
     yield window
     window.destroy()

@@ -302,8 +302,8 @@ def test_big_tables_show_a_capped_preview_but_copy_everything(make_view, app):
     assert f"first {MAX_PREVIEW_ROWS:,} of {MAX_PREVIEW_ROWS + 500:,} rows" in view.footer_label.cget("text")
     view.copy_table()
     copied = view.clipboard_get().splitlines()
-    assert len(copied) == 1 + len(rows) # header + every row
-    assert copied[0] == "Name\tPrice" and copied[-1] == "row 1499\t1499"
+    assert len(copied) == 1 + len(rows)                            # header + every row
+    assert copied[0] == "Name\tPrice" and copied[-1] == f"row {len(rows) - 1}\t{len(rows) - 1}"
     assert notes == [f"Copied {len(rows):,} rows to the clipboard."]
 
 # Copy follows the current search and sort

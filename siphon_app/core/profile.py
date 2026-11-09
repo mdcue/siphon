@@ -1,4 +1,3 @@
-# [NEW FILE] every line is new
 """
 siphon_app/core/profile.py
 

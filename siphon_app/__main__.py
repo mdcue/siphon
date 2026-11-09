@@ -1,9 +1,8 @@
 """
-siphon_app/__main.py
+siphon_app/__main__.py
 
-Lets you start the app with: python -m siphon_app
+Start the app with:  python -m siphon_app
 """
-
 from siphon_app.gui.app import main
 
 main()

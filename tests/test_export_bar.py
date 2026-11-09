@@ -1,4 +1,4 @@
-"""Tests for siphon_app/gui/export_bar.py. The widget tests are skipped with no screen."""
+"""Tests for siphon_app/gui/export_bar.py."""
 import threading
 import time
 from pathlib import Path
@@ -13,12 +13,10 @@ from siphon_app.gui.export_bar import (
     CLEAN_OFF_TEXT, CLEAN_ON_TEXT, ExportBar, default_folder, export_label, run_export,
 )
 
-
 # a small two-column table to export
 
 def table(name="Prices", rows=(("Alpha", "$1,234"), ("Beta", "$5"))):
     return Table(name, ["Name", "Price"], [list(r) for r in rows], source_url="https://example.com/p")
-
 
 # keep the window running until the condition is true, or fail after a timeout
 
@@ -30,10 +28,9 @@ def wait_until(bar, condition, timeout=5.0):
     bar.update()
     assert condition(), "timed out waiting"
 
-
 @pytest.fixture
 def make_bar(app):
-    """Build an ExportBar in its own little window. Returns (bar, notes, ticked) to poke at."""
+    """Build an ExportBar in its own little window."""
     import ttkbootstrap as ttk
     windows = []
 
@@ -52,8 +49,7 @@ def make_bar(app):
     for top in windows:
         top.destroy()
 
-
-# -- helpers that need no window
+# helpers that need no window
 
 # the button text counts the tables: Export, Export 1 table, Export 4 tables
 
@@ -62,14 +58,12 @@ def test_export_label():
     assert export_label(1) == "Export 1 table"
     assert export_label(4) == "Export 4 tables"
 
-
 # the default save folder is a real folder
 
 def test_default_folder_exists():
     assert Path(default_folder()).is_dir()
 
-
-# run_export reports success or a friendly error on a queue (it runs without a window)
+# run_export reports success or a friendly error on a queue
 
 def test_run_export_reports_success_and_friendly_errors_through_the_queue(tmp_path):
     import queue
@@ -80,8 +74,7 @@ def test_run_export_reports_success_and_friendly_errors_through_the_queue(tmp_pa
     run_export(results, [table()], "csv", "  ")
     assert results.get_nowait() == ("error", "Choose a folder to save into.")
 
-
-# run_export turns an unexpected crash into a message (export_tables is swapped for one that raises)
+# run_export turns an unexpected crash into a message
 
 def test_run_export_turns_a_surprise_crash_into_a_message(monkeypatch):
     import queue
@@ -92,8 +85,7 @@ def test_run_export_turns_a_surprise_crash_into_a_message(monkeypatch):
     run_export(results, [table()], "csv", "x")
     assert results.get_nowait() == ("error", "Something went wrong while saving (ValueError).")
 
-
-# -- the widget
+# the widget
 
 # a new bar starts on csv, cleaning on, and with nothing to export
 
@@ -105,7 +97,6 @@ def test_starts_with_csv_cleaning_on_and_nothing_to_export(make_bar):
     assert str(bar.open_button.cget("state")) == "disabled"
     assert bar.clean_label.cget("text") == CLEAN_ON_TEXT
     assert bar.folder_var.get() == default_folder()
-
 
 # the Export button follows the number of ticked tables
 
@@ -122,7 +113,6 @@ def test_the_button_counts_the_ticked_tables(make_bar):
     bar.refresh()
     assert str(bar.export_button.cget("state")) == "disabled"
 
-
 # the hint under the format picker changes with the format
 
 def test_the_hint_follows_the_chosen_format(make_bar):
@@ -135,7 +125,6 @@ def test_the_hint_follows_the_chosen_format(make_bar):
     bar._on_format()
     assert ".json" in bar.format_hint.cget("text")
 
-
 # ticking or unticking the clean box tells the window
 
 def test_changing_the_clean_box_tells_the_window(make_bar):
@@ -146,7 +135,6 @@ def test_changing_the_clean_box_tells_the_window(make_bar):
     bar.clean_var.set(True)
     bar._on_clean()
     assert seen == [False, True]
-
 
 # the clean note can be set, then reset to the on or off wording
 
@@ -160,7 +148,6 @@ def test_clean_text_can_be_set_or_reset(make_bar):
     bar.set_clean_text()
     assert bar.clean_label.cget("text") == CLEAN_OFF_TEXT
 
-
 # exporting saves the file and reports it, with the bar locked while it saves
 
 def test_exporting_saves_the_file_and_reports_it(make_bar, tmp_path):
@@ -168,15 +155,14 @@ def test_exporting_saves_the_file_and_reports_it(make_bar, tmp_path):
     bar.format_var.set("json")
     bar.folder_var.set(str(tmp_path))
     bar.on_export()
-    assert bar.busy and str(bar.export_button.cget("state")) == "disabled"     # locked while saving
+    assert bar.busy and str(bar.export_button.cget("state")) == "disabled" # locked while saving
     assert notes[0] == ("Saving ...", False)
     wait_until(bar, lambda: not bar.busy)
     assert notes[-1] == (f"Saved Prices.json to {tmp_path}.", False)
     assert (tmp_path / "Prices.json").exists()
     assert bar.last_folder == tmp_path
     assert str(bar.open_button.cget("state")) == "normal"
-    assert str(bar.export_button.cget("state")) == "normal"                    # unlocked again
-
+    assert str(bar.export_button.cget("state")) == "normal" # unlocked again
 
 # exporting with nothing ticked explains why and saves nothing
 
@@ -187,8 +173,7 @@ def test_exporting_with_nothing_ticked_explains_and_does_nothing(make_bar, tmp_p
     assert notes == [("Tick at least one table to export.", True)]
     assert not bar.busy and list(tmp_path.iterdir()) == []
 
-
-# a save problem shows as an error and the bar unlocks again (the 'folder' is really a file)
+# a save problem shows as an error and the bar unlocks again
 
 def test_a_problem_while_saving_is_shown_as_an_error_and_the_bar_recovers(make_bar, tmp_path):
     blocker = tmp_path / "file.txt"
@@ -199,9 +184,8 @@ def test_a_problem_while_saving_is_shown_as_an_error_and_the_bar_recovers(make_b
     wait_until(bar, lambda: not bar.busy)
     message, is_error = notes[-1]
     assert is_error and "Couldn't" in message
-    assert str(bar.open_button.cget("state")) == "disabled"                    # nothing was saved
+    assert str(bar.open_button.cget("state")) == "disabled" # nothing was saved
     assert str(bar.export_button.cget("state")) == "normal"
-
 
 # a blank folder gives a message, not a crash
 
@@ -212,8 +196,7 @@ def test_a_blank_folder_is_an_error_not_a_crash(make_bar):
     wait_until(bar, lambda: not bar.busy)
     assert notes[-1] == ("Choose a folder to save into.", True)
 
-
-# pressing Export twice quickly saves only once (a slow fake export keeps the first one running)
+# pressing Export twice quickly saves only once
 
 def test_pressing_export_twice_quickly_saves_only_once(make_bar, tmp_path, monkeypatch):
     gate, calls = threading.Event(), []
@@ -229,13 +212,12 @@ def test_pressing_export_twice_quickly_saves_only_once(make_bar, tmp_path, monke
     bar.format_var.set("json")
     bar.folder_var.set(str(tmp_path))
     bar.on_export()
-    bar.on_export()                                       # ignored: the first one is still running
+    bar.on_export() # ignored: the first one is still running
     gate.set()
     wait_until(bar, lambda: not bar.busy)
     assert calls == [1] and [p.name for p in tmp_path.iterdir()] == ["Prices.json"]
 
-
-# the window keeps working while a save runs (a gate holds the fake export open)
+# the window keeps working while a save runs
 
 def test_the_window_stays_alive_while_a_save_runs(make_bar, tmp_path, monkeypatch):
     gate = threading.Event()
@@ -247,14 +229,13 @@ def test_the_window_stays_alive_while_a_save_runs(make_bar, tmp_path, monkeypatc
     bar.folder_var.set(str(tmp_path))
     bar.on_export()
     for _ in range(5):
-        bar.update()                                      # would hang if saving blocked the window
+        bar.update() # would hang if saving blocked the window
         time.sleep(0.01)
     assert bar.busy
     gate.set()
     wait_until(bar, lambda: not bar.busy)
 
-
-# Browse fills in the chosen folder, and Cancel keeps the old one (the folder dialog is faked)
+# Browse fills in the chosen folder, and Cancel keeps the old one
 
 def test_browse_fills_in_the_chosen_folder_and_cancel_keeps_the_old_one(make_bar, monkeypatch, tmp_path):
     bar, _, _ = make_bar()
@@ -262,10 +243,9 @@ def test_browse_fills_in_the_chosen_folder_and_cancel_keeps_the_old_one(make_bar
     monkeypatch.setattr(bar_module.filedialog, "askdirectory", lambda **kw: str(tmp_path))
     bar.browse()
     assert Path(bar.folder_var.get()) == tmp_path
-    monkeypatch.setattr(bar_module.filedialog, "askdirectory", lambda **kw: "")      # pressed Cancel
+    monkeypatch.setattr(bar_module.filedialog, "askdirectory", lambda **kw: "") # pressed Cancel
     bar.browse()
     assert Path(bar.folder_var.get()) == tmp_path
-
 
 # Browse opens in the folder already chosen
 
@@ -277,14 +257,13 @@ def test_browse_starts_in_the_current_folder(make_bar, monkeypatch, tmp_path):
     bar.browse()
     assert seen["initialdir"] == str(tmp_path)
 
-
-# Open folder opens the last saved folder (open_folder is replaced by a recorder)
+# Open folder opens the last saved folder
 
 def test_open_folder_button_opens_the_last_saved_folder(make_bar, monkeypatch, tmp_path):
     opened = []
     monkeypatch.setattr(bar_module, "open_folder", opened.append)
     bar, notes, _ = make_bar([table()])
-    bar.on_open()                                         # nothing saved yet: nothing happens
+    bar.on_open() # nothing saved yet: nothing happens
     assert opened == []
     bar.format_var.set("json")
     bar.folder_var.set(str(tmp_path))
@@ -292,7 +271,6 @@ def test_open_folder_button_opens_the_last_saved_folder(make_bar, monkeypatch, t
     wait_until(bar, lambda: not bar.busy)
     bar.on_open()
     assert opened == [tmp_path]
-
 
 # if the folder cannot be opened, a message says so
 
@@ -305,8 +283,7 @@ def test_open_folder_failure_is_reported(make_bar, monkeypatch, tmp_path):
     bar.on_open()
     assert notes[-1] == (f"Couldn't open {tmp_path}.", True)
 
-
-# destroying the bar mid-save leaves no timer behind (Tk would report a late error, so we collect those)
+# destroying the bar mid-save leaves no timer behind
 
 def test_destroying_the_bar_mid_save_leaves_no_stray_timer(app, tmp_path, monkeypatch):
     import ttkbootstrap as ttk
@@ -327,6 +304,6 @@ def test_destroying_the_bar_mid_save_leaves_no_stray_timer(app, tmp_path, monkey
     top.destroy()
     gate.set()
     for _ in range(10):
-        app.update()                                      # a leftover timer would complain here
+        app.update() # a leftover timer would complain here
         time.sleep(0.02)
     assert errors == []

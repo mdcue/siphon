@@ -1,4 +1,4 @@
-"""Tests for siphon_app/settings.py. Nothing here needs a screen."""
+"""Tests for siphon_app/settings.py."""
 import json
 import os
 from pathlib import Path
@@ -10,13 +10,11 @@ from siphon_app.settings import (
     MAX_RECENT, Settings, load_settings, remember_url, save_settings, settings_path,
 )
 
-
 # put raw text or a dict into a settings file
 def write(path, data):
     path.write_text(data if isinstance(data, str) else json.dumps(data), encoding="utf-8")
 
-
-# -- defaults and round trips
+# defaults and round trips
 
 # a fresh Settings has the expected defaults
 def test_defaults_are_sensible():
@@ -24,17 +22,14 @@ def test_defaults_are_sensible():
     assert (s.export_folder, s.export_format, s.clean_numbers, s.theme) == ("", "csv", True, "light")
     assert (s.window_width, s.window_height, s.recent_urls) == (1000, 640, [])
 
-
 # the default path is .../Siphon/settings.json
 def test_the_settings_file_lives_in_a_siphon_folder_and_is_not_created_by_asking():
     path = settings_path()
     assert path.name == "settings.json" and path.parent.name == "Siphon"
 
-
 # no file yet means defaults
 def test_a_missing_file_gives_the_defaults(tmp_path):
     assert load_settings(tmp_path / "nothing.json") == Settings()
-
 
 # save then load gives back the same settings
 def test_everything_survives_a_save_and_a_load(tmp_path):
@@ -43,14 +38,12 @@ def test_everything_survives_a_save_and_a_load(tmp_path):
     assert save_settings(original, path) is True
     assert load_settings(path) == original
 
-
 # non-English text survives a save and load
 def test_non_english_text_survives(tmp_path):
     original = Settings(export_folder="C:/Users/\u00c9mile/\u6587\u4ef6", recent_urls=["https://\u4f8b\u3048.jp/\u8868"])
     path = tmp_path / "settings.json"
     save_settings(original, path)
     assert load_settings(path) == original
-
 
 # the file is plain JSON with a version number
 def test_the_file_is_readable_json_with_a_version(tmp_path):
@@ -59,8 +52,7 @@ def test_the_file_is_readable_json_with_a_version(tmp_path):
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["version"] == 1 and data["export_format"] == "csv"
 
-
-# -- damaged files never crash anything
+# damaged files never crash anything
 
 # broken or odd content gives defaults, never a crash
 @pytest.mark.parametrize("content", ["", "{", "not json at all", "[1, 2, 3]", "null", '"text"', "42", "\x00\x01\x02"])
@@ -69,19 +61,16 @@ def test_a_damaged_or_odd_file_gives_the_defaults(tmp_path, content):
     path.write_text(content, encoding="utf-8", errors="ignore")
     assert load_settings(path) == Settings()
 
-
 # binary junk gives defaults
 def test_a_file_that_is_not_text_at_all_gives_the_defaults(tmp_path):
     path = tmp_path / "settings.json"
     path.write_bytes(b"\xff\xfe\x00\x80\x81")
     assert load_settings(path) == Settings()
 
-
 # a folder in place of the file gives defaults
 def test_a_folder_where_the_file_should_be_gives_the_defaults(tmp_path):
     (tmp_path / "settings.json").mkdir()
     assert load_settings(tmp_path / "settings.json") == Settings()
-
 
 # each bad value falls back on its own, good ones are kept
 def test_one_bad_value_does_not_spoil_the_good_ones(tmp_path):
@@ -89,14 +78,13 @@ def test_one_bad_value_does_not_spoil_the_good_ones(tmp_path):
     write(path, {"export_folder": 5, "export_format": "xlsx", "clean_numbers": "yes", "theme": "dark",
                  "window_width": "wide", "window_height": 700, "recent_urls": "https://a.com"})
     s = load_settings(path)
-    assert s.export_folder == ""                 # wrong type: default
-    assert s.export_format == "xlsx"             # fine: kept
-    assert s.clean_numbers is True               # wrong type: default
-    assert s.theme == "dark"                     # fine: kept
-    assert s.window_width == 1000                # wrong type: default
-    assert s.window_height == 700                # fine: kept
-    assert s.recent_urls == []                   # a string instead of a list: default
-
+    assert s.export_folder == "" # wrong type: default
+    assert s.export_format == "xlsx" # fine: kept
+    assert s.clean_numbers is True # wrong type: default
+    assert s.theme == "dark" # fine: kept
+    assert s.window_width == 1000 # wrong type: default
+    assert s.window_height == 700 # fine: kept
+    assert s.recent_urls == [] # a string instead of a list: default
 
 # a format or theme we don't know falls back to the default
 @pytest.mark.parametrize("key, value, default", [
@@ -108,7 +96,6 @@ def test_unknown_choices_fall_back(tmp_path, key, value, default):
     write(path, {key: value})
     assert getattr(load_settings(path), key) == default
 
-
 # wrong types and out-of-range sizes fall back to 1000x640
 @pytest.mark.parametrize("value", [True, False, 479, 0, -5, 10_001, 1e9, 1000.5, None, "1000", [1000]])
 def test_silly_window_sizes_fall_back(tmp_path, value):
@@ -116,7 +103,6 @@ def test_silly_window_sizes_fall_back(tmp_path, value):
     write(path, {"window_width": value, "window_height": value})
     s = load_settings(path)
     assert (s.window_width, s.window_height) == (1000, 640)
-
 
 # the smallest and largest allowed sizes are fine
 def test_sizes_at_the_limits_are_accepted(tmp_path):
@@ -128,13 +114,11 @@ def test_sizes_at_the_limits_are_accepted(tmp_path):
     s = load_settings(path)
     assert (s.window_width, s.window_height) == (10_000, 10_000)
 
-
 # extra keys from a newer version are ignored
 def test_unknown_keys_are_ignored(tmp_path):
     path = tmp_path / "settings.json"
     write(path, {"theme": "dark", "future_setting": {"a": 1}})
     assert load_settings(path).theme == "dark"
-
 
 # spaces around the folder are trimmed
 def test_the_folder_text_is_trimmed(tmp_path):
@@ -142,18 +126,16 @@ def test_the_folder_text_is_trimmed(tmp_path):
     write(path, {"export_folder": "  C:/Out  "})
     assert load_settings(path).export_folder == "C:/Out"
 
-
 # junk and repeats are dropped and the list is capped
 def test_recent_addresses_are_cleaned_when_loaded(tmp_path):
     path = tmp_path / "settings.json"
     many = [f"https://site{i}.com" for i in range(30)]
     write(path, {"recent_urls": ["https://a.com", 5, None, "", "   ", ["x"], "https://a.com", "https://b.com"] + many})
     urls = load_settings(path).recent_urls
-    assert urls[:2] == ["https://a.com", "https://b.com"]       # junk and repeats gone, order kept
+    assert urls[:2] == ["https://a.com", "https://b.com"] # junk and repeats gone, order kept
     assert len(urls) == MAX_RECENT
 
-
-# -- the recent list
+# the recent list
 
 # the newest address goes first
 def test_newest_address_goes_to_the_top():
@@ -162,13 +144,11 @@ def test_newest_address_goes_to_the_top():
     remember_url(s, "https://b.com")
     assert s.recent_urls == ["https://b.com", "https://a.com"]
 
-
 # a repeated address moves to the top, no duplicate
 def test_an_address_seen_again_moves_up_instead_of_repeating():
     s = Settings(recent_urls=["https://c.com", "https://b.com", "https://a.com"])
     remember_url(s, "https://a.com")
     assert s.recent_urls == ["https://a.com", "https://c.com", "https://b.com"]
-
 
 # the list is capped and the oldest falls off
 def test_the_list_never_grows_past_the_limit():
@@ -177,8 +157,7 @@ def test_the_list_never_grows_past_the_limit():
         remember_url(s, f"https://site{i}.com")
     assert len(s.recent_urls) == MAX_RECENT
     assert s.recent_urls[0] == f"https://site{MAX_RECENT + 4}.com"
-    assert "https://site0.com" not in s.recent_urls              # the oldest fell off
-
+    assert "https://site0.com" not in s.recent_urls # the oldest fell off
 
 # blank addresses are ignored
 @pytest.mark.parametrize("blank", ["", "   ", "\n"])
@@ -187,21 +166,18 @@ def test_blank_addresses_are_not_remembered(blank):
     remember_url(s, blank)
     assert s.recent_urls == ["https://a.com"]
 
-
 # spaces around an address are trimmed
 def test_spaces_around_an_address_are_trimmed():
     s = Settings()
     remember_url(s, "  https://a.com  ")
     assert s.recent_urls == ["https://a.com"]
 
-
-# -- saving safely
+# saving safely
 
 # saving creates missing folders
 def test_saving_creates_the_folder(tmp_path):
     path = tmp_path / "deep" / "er" / "settings.json"
     assert save_settings(Settings(), path) is True and path.exists()
-
 
 # saving twice overwrites cleanly and leaves no temp file
 def test_saving_twice_replaces_the_old_file_and_leaves_no_temporary_one(tmp_path):
@@ -211,13 +187,11 @@ def test_saving_twice_replaces_the_old_file_and_leaves_no_temporary_one(tmp_path
     assert load_settings(path).theme == "light"
     assert sorted(p.name for p in tmp_path.iterdir()) == ["settings.json"]
 
-
 # a failed save returns False instead of raising
 def test_a_failed_save_returns_false_and_never_raises(tmp_path):
     blocker = tmp_path / "file.txt"
     blocker.write_text("hi")
-    assert save_settings(Settings(), blocker / "settings.json") is False      # the "folder" is a file
-
+    assert save_settings(Settings(), blocker / "settings.json") is False # the "folder" is a file
 
 # if the final swap fails, the old file survives and no temp is left
 def test_a_crash_while_swapping_keeps_the_old_file_and_cleans_up(tmp_path, monkeypatch):
@@ -230,9 +204,8 @@ def test_a_crash_while_swapping_keeps_the_old_file_and_cleans_up(tmp_path, monke
     monkeypatch.setattr(os, "replace", broken_replace)
     assert save_settings(Settings(theme="light"), path) is False
     monkeypatch.undo()
-    assert load_settings(path).theme == "dark"                    # the old file is untouched
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["settings.json"]    # no leftover .tmp
-
+    assert load_settings(path).theme == "dark" # the old file is untouched
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["settings.json"] # no leftover .tmp
 
 # with no path given, the default settings path is used
 def test_default_path_is_used_when_none_is_given(tmp_path, monkeypatch):

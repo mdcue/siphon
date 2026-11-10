@@ -57,6 +57,8 @@ class GridView(ttk.Frame):
         self.on_menu = on_menu or (lambda column, x, y: None)       # heading right-clicked (column, screen x, y)
         self.on_resize = on_resize or (lambda column, width: None)  # heading edge dragged (column, new width)
 
+        self._x_seen: tuple = ()   # last sideways position the scroll bar was given
+        self._y_seen: tuple = ()   # same for up and down
         self.headers: list[str] = []
         self.rows: list[list[str]] = []                 # the text of every row shown
         self.widths: list[int] = []
@@ -66,6 +68,7 @@ class GridView(ttk.Frame):
         self.selected: int | None = None                # the highlighted row
         self.drawn: list[tuple[int, int, str]] = []     # (row, column, text) of the cells drawn last time
 
+        self._box: tuple[float, float, float, float] | None = None     # canvas area drawn last time
         self._edges = [0]                               # x of each column's left edge, plus the far right edge
         self._cache: list[dict[int, str]] = []          # per column: row -> text cut to fit
         self._redraw_job = None
@@ -96,7 +99,7 @@ class GridView(ttk.Frame):
 
         self._load_colors()
         self.bind("<<ThemeChanged>>", self._on_theme_changed)
-        self.body.bind("<Configure>", lambda event: self._schedule_redraw())
+        self.body.bind("<Configure>", lambda event: self._invalidate())
         self.body.bind("<Button-1>", self._on_body_click)
         self.body.bind("<Enter>", lambda event: self.body.focus_set())      # so the wheel and keys reach it
         for widget in (self.body, self.header):
@@ -144,7 +147,9 @@ class GridView(ttk.Frame):
         colors = ttk.Style().colors
         self.c_body, self.c_text = colors.inputbg, colors.inputfg
         self.c_stripe = blend(colors.inputbg, colors.border, 0.25)
-        self.c_head, self.c_head_text = colors.light, colors.fg
+        # The heading is the body colour nudged toward the text colour, so it is a little darker in a
+        # light theme and a little lighter in a dark one, and the text on it always stays readable.
+        self.c_head, self.c_head_text = blend(colors.inputbg, colors.inputfg, 0.12), colors.inputfg
         self.c_line = colors.border
         self.c_select, self.c_select_text = colors.selectbg, colors.selectfg
         self.header.configure(bg=self.c_head)
@@ -153,7 +158,7 @@ class GridView(ttk.Frame):
     def _on_theme_changed(self, event=None) -> None:
         self._load_colors()
         self._draw_header()
-        self._schedule_redraw()
+        self._invalidate()
 
     def _layout(self) -> None:
         """The data or the widths changed: recompute the edges and scroll area, then redraw."""
@@ -165,7 +170,7 @@ class GridView(ttk.Frame):
         self.header.configure(scrollregion=(0, 0, total_width, self.header_height))
         self._draw_header()
         self.header.xview_moveto(self.body.xview()[0])
-        self._schedule_redraw()
+        self._invalidate()
 
     # ---- drawing ---------------------------------------------------------------------
 
@@ -193,6 +198,33 @@ class GridView(ttk.Frame):
         if self._redraw_job is None:
             self._redraw_job = self.after_idle(self._redraw)
 
+    def _invalidate(self) -> None:
+        """What is drawn is out of date (new data, new size, new colours): redraw for sure."""
+        self._box = None
+        self._schedule_redraw()
+
+    def _view_size(self) -> tuple[int, int]:
+        """The size of the visible part of the body (a fixed guess while it is not on screen yet)."""
+        width, height = self.body.winfo_width(), self.body.winfo_height()
+        return (width, height) if width > 1 else FALLBACK_SIZE
+
+    def _scrolled(self) -> None:
+        """
+        The view moved. We draw a bit more than is visible (one extra screen on every side), and
+        Tk slides those already-drawn items around by itself, which is fast. So we only redraw
+        when the view is about to run out of drawn cells.
+        """
+        if self._box is None:
+            self._schedule_redraw()
+            return
+        view_w, view_h = self._view_size()
+        x0, y0 = self.body.canvasx(0), self.body.canvasy(0)
+        left, top, right, bottom = self._box
+        total_w, total_h = self._edges[-1], len(self.rows) * self.row_height
+        if (x0 < left or y0 < top or min(x0 + view_w, total_w) > right
+                or min(y0 + view_h, total_h) > bottom):
+            self._schedule_redraw()
+
     def _fit(self, row: int, column: int) -> str:
         """The text of one cell, cut to the column width (remembered, because measuring is slow)."""
         cache = self._cache[column]
@@ -201,25 +233,30 @@ class GridView(ttk.Frame):
         return cache[row]
 
     def _redraw(self) -> None:
-        """Draw just the rows and columns that are on screen right now."""
+        """Draw the cells around the visible area (the visible part plus one extra screen on each side)."""
         self._redraw_job = None
         b = self.body
         b.delete("all")
         self.drawn = []
+        self._box = None
         if not self.rows or not self.widths:
             return
-        view_w, view_h = b.winfo_width(), b.winfo_height()
-        if view_w <= 1:
-            view_w, view_h = FALLBACK_SIZE
+        view_w, view_h = self._view_size()
         x0, y0 = b.canvasx(0), b.canvasy(0)
         rh = self.row_height
+        total_w, total_h = self._edges[-1], len(self.rows) * rh
 
-        first_row = max(0, int(y0 // rh))
-        last_row = min(len(self.rows), int((y0 + view_h) // rh) + 1)
-        first_col = max(0, min(bisect_right(self._edges, x0) - 1, len(self.widths) - 1))
+        # the area to draw: the view plus one screen each way, kept inside the data
+        left, right = max(0.0, x0 - view_w), min(float(total_w), x0 + 2 * view_w)
+        top, bottom = max(0.0, y0 - view_h), min(float(total_h), y0 + 2 * view_h)
+        first_row = int(top // rh)
+        last_row = min(len(self.rows), int(bottom // rh) + 1)
+        first_col = max(0, min(bisect_right(self._edges, left) - 1, len(self.widths) - 1))
         last_col = first_col
-        while last_col < len(self.widths) and self._edges[last_col] < x0 + view_w:
+        while last_col < len(self.widths) and self._edges[last_col] < right:
             last_col += 1
+        # remember what we covered, but only up to the edge of the last drawn row and column
+        self._box = (self._edges[first_col], first_row * rh, self._edges[last_col], last_row * rh)
 
         for row in range(first_row, last_row):
             y = row * rh
@@ -227,17 +264,17 @@ class GridView(ttk.Frame):
                 fill, text_color = self.c_select, self.c_select_text
             else:
                 fill, text_color = (self.c_stripe if row % 2 else self.c_body), self.c_text
-            b.create_rectangle(x0, y, x0 + view_w, y + rh, fill=fill, outline="")
+            b.create_rectangle(self._edges[first_col], y, self._edges[last_col], y + rh, fill=fill, outline="")
             for column in range(first_col, last_col):
                 text = self._fit(row, column)
                 self.drawn.append((row, column, text))
                 if not text:
                     continue
-                left, right = self._edges[column], self._edges[column + 1]
+                cell_left, cell_right = self._edges[column], self._edges[column + 1]
                 if self.aligns[column] == "e":
-                    b.create_text(right - PAD, y + rh / 2, text=text, anchor="e", fill=text_color, font=self.font)
+                    b.create_text(cell_right - PAD, y + rh / 2, text=text, anchor="e", fill=text_color, font=self.font)
                 else:
-                    b.create_text(left + PAD, y + rh / 2, text=text, anchor="w", fill=text_color, font=self.font)
+                    b.create_text(cell_left + PAD, y + rh / 2, text=text, anchor="w", fill=text_color, font=self.font)
         for column in range(first_col, last_col):                   # thin lines between the columns
             x = self._edges[column + 1] - 1
             b.create_line(x, first_row * rh, x, last_row * rh, fill=self.c_line)
@@ -249,13 +286,19 @@ class GridView(ttk.Frame):
 
     def _on_xscrolled(self, first, last) -> None:
         """The body scrolled sideways: move the scroll bar and the headings with it."""
-        self.hbar.set(first, last)
-        self.header.xview_moveto(first)
-        self._schedule_redraw()
+        # the canvas reports this on every vertical step too, and a scroll bar
+        # redraw is slow on Windows, so only touch things when it really moved
+        if (first, last) != self._x_seen:
+            self._x_seen = (first, last)
+            self.hbar.set(first, last)
+            self.header.xview_moveto(first)
+        self._scrolled()
 
     def _on_yscrolled(self, first, last) -> None:
-        self.vbar.set(first, last)
-        self._schedule_redraw()
+        if (first, last) != self._y_seen:
+            self._y_seen = (first, last)
+            self.vbar.set(first, last)
+        self._scrolled()
 
     def _on_wheel(self, event) -> str:
         self.body.yview_scroll(self._notches(event) * WHEEL_ROWS, "units")
@@ -288,7 +331,7 @@ class GridView(ttk.Frame):
         row = int(self.body.canvasy(event.y) // self.row_height)
         self.selected = row if 0 <= row < len(self.rows) else None
         self.body.focus_set()
-        self._schedule_redraw()
+        self._invalidate()
 
     # ---- the headings: sorting, the menu and resizing --------------------------------
 

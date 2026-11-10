@@ -117,25 +117,88 @@ def test_right_aligned_columns_anchor_east(make_grid):
     assert anchors == {"l": "w", "r": "e"}
 
 
-# only the cells on screen are drawn, however big the table is
-def test_only_the_visible_cells_are_drawn(make_grid):
+# only the cells around the screen are drawn, however big the table is
+def test_only_the_cells_around_the_screen_are_drawn(make_grid):
     rows = [[f"r{r}c{c}" for c in range(50)] for r in range(1000)]
     grid, _ = make_grid(headers=[f"H{c}" for c in range(50)], rows=rows, widths=[100] * 50, aligns=["w"] * 50)
-    assert 0 < len(grid.drawn) < 200
-    assert {c for _, c, _ in grid.drawn} == set(range(8))          # 800 px wide when not on screen: 8 columns
+    assert 0 < len(grid.drawn) < 1500                              # of 50,000 cells
+    assert {c for _, c, _ in grid.drawn} == set(range(16))        # the 800 px view + one more screen: 1,600 px
+    assert max(r for r, _, _ in grid.drawn) == int(800 // grid.row_height)
 
 
-# scrolling down or across draws different cells, with the right text
-def test_scrolling_draws_the_cells_that_come_into_view(make_grid):
+# scrolling far away and redrawing draws the cells that are now around the view, with the right text
+def test_a_redraw_after_scrolling_draws_the_cells_around_the_new_view(make_grid):
     rows = [[f"r{r}c{c}" for c in range(50)] for r in range(1000)]
     grid, _ = make_grid(headers=[f"H{c}" for c in range(50)], rows=rows, widths=[100] * 50, aligns=["w"] * 50)
     grid.body.yview_scroll(100, "units")
-    grid.body.xview_scroll(20, "units")                           # 20 clicks of 24 px = 480 px: from column 4
+    grid.body.xview_scroll(100, "units")                          # 100 clicks of 24 px = 2,400 px: column 24
     grid._redraw()
-    assert (100, 4) in {(r, c) for r, c, _ in grid.drawn} or (100, 5) in {(r, c) for r, c, _ in grid.drawn}
-    row, column, text = grid.drawn[0]
-    assert row == 100 and text == f"r{row}c{column}"
-    assert min(c for _, c, _ in grid.drawn) >= 4
+    cells = {(r, c) for r, c, _ in grid.drawn}
+    assert (100, 24) in cells and (0, 0) not in cells
+    assert all(text == f"r{r}c{c}" for r, c, text in grid.drawn)
+    assert min(c for _, c in cells) >= 24 - 8 - 1 and max(r for r, _ in cells) < 100 + 40
+
+
+# scrolling a little reuses what is drawn (Tk slides the items), so nothing is redrawn
+def test_a_small_scroll_does_not_redraw(make_grid):
+    rows = [[f"r{r}c{c}" for c in range(50)] for r in range(1000)]
+    grid, _ = make_grid(headers=[f"H{c}" for c in range(50)], rows=rows, widths=[100] * 50, aligns=["w"] * 50)
+    before = grid.drawn
+    grid.body.yview_scroll(3, "units")
+    grid.body.xview_scroll(3, "units")
+    grid.update_idletasks()
+    grid.update_idletasks()
+    assert grid.drawn is before
+
+
+def test_scrolling_down_does_not_touch_the_sideways_scroll_bar(make_grid):
+    rows = [[f"r{r}c{c}" for c in range(50)] for r in range(1000)]
+    grid, _ = make_grid(headers=[f"H{c}" for c in range(50)], rows=rows, widths=[100] * 50, aligns=["w"] * 50)
+    grid.update_idletasks()
+    sets = []
+    real = grid.hbar.set
+    grid.hbar.set = lambda *a: (sets.append(a), real(*a))
+    for _ in range(5):
+        grid.body.yview_scroll(1, "units")
+        grid.update_idletasks()
+    assert sets == []
+
+
+def test_scrolling_sideways_still_moves_the_bar_and_the_headings(make_grid):
+    rows = [[f"r{r}c{c}" for c in range(50)] for r in range(100)]
+    grid, _ = make_grid(headers=[f"H{c}" for c in range(50)], rows=rows, widths=[100] * 50, aligns=["w"] * 50)
+    grid._on_xscrolled(0.25, 0.5)
+    assert grid.hbar.get() == pytest.approx((0.25, 0.5))
+    assert grid.header.xview()[0] == pytest.approx(0.25, abs=0.01)   # snaps to whole steps
+
+
+# scrolling past the drawn area redraws, in each of the four directions
+@pytest.mark.parametrize("direction", ["down", "right", "up", "left"])
+def test_scrolling_past_the_drawn_area_redraws(make_grid, direction):
+    rows = [[f"r{r}c{c}" for c in range(50)] for r in range(1000)]
+    grid, _ = make_grid(headers=[f"H{c}" for c in range(50)], rows=rows, widths=[100] * 50, aligns=["w"] * 50)
+    if direction in ("up", "left"):                               # first go somewhere, so there is room to go back
+        grid.body.yview_scroll(300, "units")
+        grid.body.xview_scroll(200, "units")
+        grid._redraw()
+    before = grid.drawn
+    far = {"down": ("y", 100), "right": ("x", 100), "up": ("y", -100), "left": ("x", -100)}[direction]
+    getattr(grid.body, f"{far[0]}view_scroll")(far[1], "units")
+    grid.update_idletasks()
+    grid.update_idletasks()
+    assert grid.drawn is not before
+
+
+# the last stretch of the data is drawn to the edge, and scrolling to the very end works
+def test_scrolling_to_the_end_draws_the_last_rows_and_columns(make_grid):
+    rows = [[f"r{r}c{c}" for c in range(50)] for r in range(1000)]
+    grid, _ = make_grid(headers=[f"H{c}" for c in range(50)], rows=rows, widths=[100] * 50, aligns=["w"] * 50)
+    grid.body.yview_moveto(1)
+    grid.body.xview_moveto(1)
+    grid.update_idletasks()
+    grid.update_idletasks()
+    cells = {(r, c) for r, c, _ in grid.drawn}
+    assert (999, 49) in cells
 
 
 # clicking a row highlights it, clicking below the data clears it
@@ -342,11 +405,11 @@ def test_a_grid_with_headings_but_no_rows_draws_no_cells(make_grid):
     assert grid.drawn == [] and grid.heading_texts() == ["Name", "Price"]
 
 
-# the row that is cut off at the bottom edge is drawn too (otherwise the grid looks empty at the end)
+# the row that is cut off at the bottom of the drawn area is included too
 def test_the_partly_visible_last_row_is_drawn(make_grid):
     rows = [[f"r{r}"] for r in range(500)]
     grid, _ = make_grid(headers=["A"], rows=rows, widths=[100], aligns=["w"])
-    assert {r for r, _, _ in grid.drawn} == set(range(int(400 // grid.row_height) + 1))
+    assert {r for r, _, _ in grid.drawn} == set(range(int(800 // grid.row_height) + 1))
 
 
 # the selected row is painted in the selection colour, the others are not
@@ -375,3 +438,20 @@ def test_the_selection_is_dropped_exactly_when_its_row_is_gone(make_grid):
     assert grid.selected == 1
     grid.set_data(["A"], [["x"]], [100], ["w"])
     assert grid.selected is None
+
+
+# the heading colour is close to the body colour (so it stays readable) and never equals the text colour
+def test_the_heading_colours_stay_readable(make_grid):
+    grid, _ = make_grid()
+    assert grid.c_head != grid.c_head_text
+    assert grid.c_head_text == grid.c_text
+    assert grid.c_head == blend(grid.c_body, grid.c_text, 0.12)
+
+
+# the heading colour follows a theme change
+def test_the_heading_colour_follows_the_theme(app, make_grid):
+    grid, _ = make_grid()
+    style = grid.winfo_toplevel().tk.call("ttk::style", "theme", "use")
+    import ttkbootstrap as ttk
+    colors = ttk.Style().colors
+    assert grid.header.cget("bg") == grid.c_head == blend(colors.inputbg, colors.inputfg, 0.12)

@@ -4,6 +4,16 @@ Pull the tables off a web page and save them as CSV, Excel or JSON. A small Wind
 
 ![Siphon showing a table from a web page](docs/screenshots/main.png)
 
+## Why?
+
+Copying tables manually from a browser is tedious and error-prone: columns shift, footnote markers like [1] sneak in, and numbers often paste as plain text so Excel cannot add them up. Siphon solves this by reading the underlying HTML, repairing messy merged cells, parsing and cleaning currency or percentages into real numbers, and ensuring your files are never accidentally overwritten.
+
+## Usecases?
+
+- **Data Analysts & Researchers:** Quickly pulling pricing grids, historical statistics, or demographic tables from static web pages straight into structured Excel workbooks or JSON pipelines.
+- **Developers & Scripters:** Using `siphon-cli.exe` inside automated terminal scripts or cron jobs to harvest raw tabular data without writing custom parsing code for every site.
+- **Finance & Tracking:** Cleaning text-heavy financial tables where columns mix currency signs, percentages, and accounting brackets into uniform, calculator-ready numbers.
+
 ## What it does
 
 - Paste a web address (or open a page you saved from your browser) and siphon finds every table on it.

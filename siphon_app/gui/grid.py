@@ -21,7 +21,7 @@ PAD = 8                 # space on each side of the text in a cell
 MIN_WIDTH = 40          # a column can't be dragged narrower than this
 HANDLE = 5              # how close (in pixels) to a heading's right edge counts as 'the edge'
 WHEEL_ROWS = 3          # rows moved by one notch of the mouse wheel
-STEP_X = 24             # pixels moved by one click on a sideways arrow
+WHEEL_COLUMNS = 1       # columns moved by one notch of Shift + wheel
 FALLBACK_SIZE = (800, 400)      # how much to draw when the grid is not on screen yet (tests)
 ARROW_UP, ARROW_DOWN = " ^", " v"    # sort arrows: plain characters, every font has them
 
@@ -88,13 +88,13 @@ class GridView(ttk.Frame):
         self.header = tk.Canvas(self, height=self.header_height, highlightthickness=0, bd=0)
         self.header.grid(row=0, column=0, sticky="ew")
         self.body = tk.Canvas(self, highlightthickness=0, bd=0, takefocus=1,
-                              xscrollincrement=STEP_X, yscrollincrement=self.row_height)
+                              xscrollincrement=1, yscrollincrement=self.row_height)
         self.body.grid(row=1, column=0, sticky="nsew")
         self.vbar = ttk.Scrollbar(self, orient="vertical", command=self.body.yview)
         self.vbar.grid(row=1, column=1, sticky="ns")
         self.hbar = ttk.Scrollbar(self, orient="horizontal", command=self._xview)
         self.hbar.grid(row=2, column=0, sticky="ew")
-        self.header.configure(xscrollincrement=STEP_X)
+        self.header.configure(xscrollincrement=1)
         self.body.configure(xscrollcommand=self._on_xscrolled, yscrollcommand=self._on_yscrolled)
 
         self._load_colors()
@@ -305,8 +305,19 @@ class GridView(ttk.Frame):
         return "break"
 
     def _on_shift_wheel(self, event) -> str:
-        self.body.xview_scroll(self._notches(event) * WHEEL_ROWS, "units")
+        self._scroll_columns(self._notches(event) * WHEEL_COLUMNS)
         return "break"
+
+    def _scroll_columns(self, count: int) -> None:
+        """Move sideways by whole columns so a column always lines up with the left edge."""
+        if not self.widths:
+            return
+        x0 = self.body.canvasx(0)
+        index = bisect_right(self._edges, x0 + 0.5) - 1          # the column at the left edge
+        if count < 0 and x0 > self._edges[index] + 0.5:
+            count += 1                                           # part-way into a column: going left snaps to its start
+        target = min(max(index + count, 0), len(self.widths) - 1)
+        self.body.xview_moveto(self._edges[target] / self._edges[-1])
 
     @staticmethod
     def _notches(event) -> int:
@@ -317,7 +328,7 @@ class GridView(ttk.Frame):
     def _on_key(self, action: tuple[str, int]) -> str:
         kind, direction = action
         if kind == "x":
-            self.body.xview_scroll(direction, "units")
+            self._scroll_columns(direction)
         elif kind == "y":
             self.body.yview_scroll(direction, "units")
         else:

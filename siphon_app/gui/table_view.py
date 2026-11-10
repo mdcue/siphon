@@ -15,6 +15,7 @@ from siphon_app.core.cleaner import parse_number
 from siphon_app.core.columns import ColumnError, clean_name, reshape, visible_columns
 from siphon_app.core.models import Cell, Table
 from siphon_app.gui.dialogs import ask_name
+from siphon_app.gui.grid import GridView
 from siphon_app.gui.profile_window import ProfileWindow
 
 MAX_PREVIEW_ROWS = 300        # a window can't usefully show more, and drawing 30,000 rows is slow
@@ -26,7 +27,8 @@ CHECKED, UNCHECKED = "[x]", "[ ]"
 ARROW_UP, ARROW_DOWN = " ^", " v"
 PLACEHOLDER = "Tables will show up here."
 # little hint under the preview
-TIP = "Tip: right-click a column heading to rename or hide it."
+TIP = "Tip: right-click a column heading to rename or hide it. Drag a heading's edge to resize it."
+COLUMN_MIN, COLUMN_MAX = 50, 200      # starting width of a column is its widest text, kept between these (pixels)
 
 
 # ---- helpers that need no window, so they are easy to test -----------------------------
@@ -73,29 +75,6 @@ def sort_rows(rows: list[list[Cell]], column: int, descending: bool = False) -> 
     return filled + blank
 
 
-def column_window(widths: list[int], first: int, available: float) -> tuple[int, int]:
-    """
-    Which columns to draw: the range (first, stop) that fits in `available` pixels.
-
-    Windows redraws the whole grid on every pixel of a sideways scroll, which gets very slow
-    with wide tables. So we only ever draw the columns that fit and scroll one column at a time.
-    Always shows at least one column, and near the right edge it pulls `first` back so the
-    window never ends with empty space while more columns are hidden on the left.
-    """
-    count = len(widths)
-    if count == 0:
-        return 0, 0
-    first = max(0, min(first, count - 1))
-    stop, used = first, 0
-    while stop < count and (stop == first or used + widths[stop] <= available):
-        used += widths[stop]
-        stop += 1
-    while first > 0 and stop == count and used + widths[first - 1] <= available:
-        first -= 1
-        used += widths[first]
-    return first, stop
-
-
 def rows_to_tsv(headers: list[str], rows: list[list[Cell]]) -> str:
     """Tab-separated text that pastes straight into Excel."""
     def clean(cell: Cell) -> str:
@@ -136,10 +115,7 @@ class TableView(ttk.Frame):
         # Positions are the ORIGINAL column numbers, so changes stay on the right column.
         self._hidden: dict[int, set[int]] = {}
         self._names: dict[int, dict[int, str]] = {}
-        self._first_column = 0                            # first column drawn in the preview (see column_window)
-        self._shown_count = 0                             # how many columns are drawn right now
-        self._col_widths: list[int] = []                  # pixel width of every column of the current table
-        self._resize_job = None
+        self._widths: dict[int, dict[int, int]] = {}      # widths the person dragged, per table and ORIGINAL column
         self._view_columns: list[int] = []                # original position of each column showing now
         self.ask_name = ask_name                          # a plain attribute so tests can swap in a fake
         self.profile_window: ProfileWindow | None = None
@@ -241,24 +217,16 @@ class TableView(ttk.Frame):
                                          command=self.show_profile)
         self.profile_button.grid(row=0, column=3, padx=(8, 0))
 
-        # the preview grid with its scrollbars
-        self.preview = ttk.Treeview(right, show="headings", selectmode="extended")
-        self.preview.grid(row=2, column=0, sticky="nsew")
-        y_scroll = ttk.Scrollbar(right, orient="vertical", command=self.preview.yview)
-        y_scroll.grid(row=2, column=1, sticky="ns")
-        # Sideways scrolling is ours, not Tk's: Tk's own is very slow on Windows (see column_window).
-        self.x_scroll = ttk.Scrollbar(right, orient="horizontal", command=self._on_xscroll)
-        self.x_scroll.grid(row=3, column=0, sticky="ew")
-        self.preview.configure(yscrollcommand=y_scroll.set)
-        self.preview.bind("<Configure>", self._on_preview_resize)
-        self.preview.bind("<Shift-MouseWheel>", self._on_shift_wheel)
+        # the preview grid (it brings its own scroll bars)
+        self.preview = GridView(right, on_sort=self._sort_by, on_menu=self._open_column_menu,
+                                on_resize=self._remember_width)
+        self.preview.grid(row=2, column=0, columnspan=2, sticky="nsew")
 
         # footer note and the right-click tip
         self.footer_label = ttk.Label(right, text="", bootstyle="secondary")
-        self.footer_label.grid(row=4, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        self.footer_label.grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 0))
         self.tip_label = ttk.Label(right, text=TIP, bootstyle="secondary")
-        self.tip_label.grid(row=5, column=0, columnspan=2, sticky="w")
-        self.preview.bind("<Button-3>", self._on_preview_right_click)
+        self.tip_label.grid(row=4, column=0, columnspan=2, sticky="w")
 
     # ---- public ----------------------------------------------------------------------
 
@@ -266,6 +234,7 @@ class TableView(ttk.Frame):
         """Show a new set of tables (or the placeholder, if there are none)."""
         self._tables = list(tables)
         self._checked = {i for i, table in enumerate(self._tables) if not table.is_layout}
+        self._widths = {}                                 # ...and with the automatic widths
         self._hidden = {}                                 # a fresh page starts with all columns showing
         self._names = {}
         self._current = None
@@ -360,6 +329,7 @@ class TableView(ttk.Frame):
             return
         self._hidden.pop(self._current, None)
         self._names.pop(self._current, None)
+        self._widths.pop(self._current, None)
         self._columns_changed()
 
     def columns_changed_for_current(self) -> bool:
@@ -390,19 +360,21 @@ class TableView(ttk.Frame):
                          state="normal" if self.columns_changed_for_current() else "disabled")
         return menu
 
-    def _on_preview_right_click(self, event) -> None:
-        """Show the column menu when a column heading is right-clicked."""
-        # only react to a click on a column HEADING, not on a data row
-        if self._current is None or self.preview.identify_region(event.x, event.y) != "heading":
-            return
-        position = self._first_column + int(self.preview.identify_column(event.x).lstrip("#")) - 1
-        if not 0 <= position < len(self._view_columns):
+    def _open_column_menu(self, position: int, x_root: int, y_root: int) -> None:
+        """A column heading was right-clicked: pop up the menu for that column."""
+        if self._current is None or not 0 <= position < len(self._view_columns):
             return
         menu = self.build_column_menu(position)
         try:                                              # grab_release avoids a stuck mouse grab after the menu closes (tkinter quirk)
-            menu.tk_popup(event.x_root, event.y_root)
+            menu.tk_popup(x_root, y_root)
         finally:
             menu.grab_release()
+
+    def _remember_width(self, position: int, width: int) -> None:
+        """A heading edge was dragged: keep that width for this column (until a new page is fetched)."""
+        if self._current is None or not 0 <= position < len(self._view_columns):
+            return
+        self._widths.setdefault(self._current, {})[self._view_columns[position]] = width
 
     def show_profile(self) -> None:
         """Open the profile pop-up for the selected table, replacing one that is already open."""
@@ -487,22 +459,18 @@ class TableView(ttk.Frame):
     # ---- the preview -----------------------------------------------------------------
 
     def _reset_preview_controls(self) -> None:
-        """Clear the search box and the sort, and scroll back to the first column."""
+        """Clear the search box and the sort, and scroll the preview back to the top left."""
         self.search_var.set("")
         self._sort_column = None
         self._sort_descending = False
-        self._first_column = 0
+        self.preview.scroll_to_left()
 
     def _clear_preview(self) -> None:
         """Empty the preview grid and its labels."""
         self.name_label.configure(text="")
         self.size_label.configure(text="")
         self.footer_label.configure(text="")
-        self.preview.delete(*self.preview.get_children())
-        self.preview.configure(displaycolumns="#all")      # must go first: it can't name columns that vanish
-        self.preview.configure(columns=())
-        self._col_widths = []
-        self._apply_columns()
+        self.preview.clear()
         self._shown_rows = []
 
     def _render_preview(self) -> None:
@@ -519,26 +487,20 @@ class TableView(ttk.Frame):
         self.size_label.configure(text=f"{table.n_rows:,} rows \u00d7 {table.n_cols} columns")
 
         font = tkfont.nametofont("TkDefaultFont")
-        ids = [str(i) for i in range(table.n_cols)]
-        self._col_widths = []
-        self.preview.delete(*self.preview.get_children())
-        self.preview.configure(displaycolumns="#all")      # must go first: it can't name columns that vanish
-        self.preview.configure(columns=ids)
+        bold = font.copy()
+        bold.configure(weight="bold")
+        dragged = self._widths.get(self._current, {})
+        widths, aligns = [], []
         for column, header in enumerate(table.headers):
-            arrow = ""
-            if column == self._sort_column:
-                arrow = ARROW_DOWN if self._sort_descending else ARROW_UP
-            self.preview.heading(ids[column], text=header + arrow,
-                                 command=lambda c=column: self._sort_by(c))
-            sample = [display(r[column]) for r in table.rows[:100]]
-            width = max([font.measure(header + ARROW_UP)] + [font.measure(text) for text in sample]) + 24
-            width = max(60, min(width, 320))
-            self._col_widths.append(width)
-            self.preview.column(ids[column], width=width, stretch=False,
-                                anchor="e" if is_numeric_column(table.rows, column) else "w")
-        for row in rows[:MAX_PREVIEW_ROWS]:
-            self.preview.insert("", "end", values=[display(cell) for cell in row])
-        self._apply_columns()
+            if self._view_columns[column] in dragged:                 # the person set this width by hand
+                widths.append(dragged[self._view_columns[column]])
+            else:                                                     # widest of the heading and the first 100 cells
+                sample = [display(r[column]) for r in table.rows[:100]]
+                wanted = max([bold.measure(header) + 24] + [font.measure(text) + 16 for text in sample])
+                widths.append(max(COLUMN_MIN, min(wanted, COLUMN_MAX)))
+            aligns.append("e" if is_numeric_column(table.rows, column) else "w")
+        self.preview.set_data(table.headers, [[display(cell) for cell in row] for row in rows[:MAX_PREVIEW_ROWS]],
+                              widths, aligns, self._sort_column, self._sort_descending)
 
         if len(rows) > MAX_PREVIEW_ROWS:
             self.footer_label.configure(text=f"Showing the first {MAX_PREVIEW_ROWS:,} of {len(rows):,} rows. "
@@ -547,58 +509,6 @@ class TableView(ttk.Frame):
             self.footer_label.configure(text=f"{len(rows):,} of {table.n_rows:,} rows match.")
         else:
             self.footer_label.configure(text="")
-
-    # ---- sideways scrolling ----------------------------------------------------------
-
-    def _apply_columns(self) -> None:
-        """Draw only the columns that fit (from _first_column) and update the scroll bar."""
-        count = len(self._col_widths)
-        width = self.preview.winfo_width()
-        available = width if width > 1 else float("inf")      # not on screen yet: draw everything
-        first, stop = column_window(self._col_widths, self._first_column, available)
-        self._first_column = first
-        self._shown_count = stop - first
-        if count:
-            ids = [str(i) for i in range(first, stop)]
-            if list(self.preview.cget("displaycolumns")) != ids:     # skip a redraw when nothing changed
-                self.preview.configure(displaycolumns=ids)
-            self.x_scroll.set(first / count, stop / count)
-        else:
-            self.x_scroll.set(0, 1)
-
-    def _scroll_columns(self, first: int) -> None:
-        """Jump so that `first` is the first column drawn."""
-        count = len(self._col_widths)
-        self._first_column = max(0, min(first, max(count - 1, 0)))
-        self._apply_columns()
-
-    def _on_xscroll(self, *args) -> None:
-        """The scroll bar asks to move: 'moveto' (dragged) or 'scroll' (arrows, trough clicks)."""
-        count = len(self._col_widths)
-        if not count:
-            return
-        if args[0] == "moveto":
-            self._scroll_columns(round(float(args[1]) * count))
-        elif args[0] == "scroll":
-            step = int(args[1])
-            if args[2] == "pages":
-                step *= max(1, self._shown_count - 1)             # a page = what is on screen, minus one for context
-            self._scroll_columns(self._first_column + step)
-
-    def _on_shift_wheel(self, event) -> str:
-        """Shift + mouse wheel scrolls sideways, one column per notch."""
-        self._scroll_columns(self._first_column + (-1 if event.delta > 0 else 1))
-        return "break"
-
-    def _on_preview_resize(self, event=None) -> None:
-        """The grid changed size: more or fewer columns fit now. Wait for the resizing to settle."""
-        if self._resize_job is not None:
-            self.after_cancel(self._resize_job)
-        self._resize_job = self.after(50, self._after_resize)
-
-    def _after_resize(self) -> None:
-        self._resize_job = None
-        self._apply_columns()
 
     def _sort_by(self, column: int) -> None:
         """A column heading was clicked: sort by it, or reverse if it is already the sort column."""

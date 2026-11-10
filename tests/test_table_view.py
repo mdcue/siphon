@@ -3,7 +3,7 @@ import pytest
 
 from siphon_app.core.models import Table
 from siphon_app.gui.table_view import (
-    ARROW_DOWN, ARROW_UP, CHECKED, MAX_PREVIEW_ROWS, UNCHECKED, TableView, column_window,
+    ARROW_DOWN, ARROW_UP, CHECKED, COLUMN_MAX, COLUMN_MIN, MAX_PREVIEW_ROWS, UNCHECKED, TableView,
     display, filter_rows, is_numeric_column, rows_to_tsv, size_text, sort_rows,
 )
 
@@ -146,7 +146,7 @@ def listed(view):
 
 def shown(view):
     """The preview rows as plain lists of text (Tk turns '5' into 5, so we compare as text)."""
-    return [[str(v) for v in view.preview.item(i, "values")] for i in view.preview.get_children()]
+    return [list(row) for row in view.preview.rows]
 
 
 # a new view shows a placeholder and no tables
@@ -169,7 +169,7 @@ def test_lists_tables_with_sizes_and_previews_the_first(make_view):
     assert view.name_label.cget("text") == "Prices"
     assert view.size_label.cget("text") == "2 rows \u00d7 2 columns"
     assert shown(view) == [["Alpha", "$1"], ["Beta", "$2"]]
-    assert [view.preview.heading(c, "text") for c in view.preview["columns"]] == ["Name", "Price"]
+    assert view.preview.heading_texts() == ["Name", "Price"]
 
 
 # layout tables are hidden and unticked by default
@@ -254,7 +254,7 @@ def test_choosing_another_table_changes_the_preview(make_view):
     view.update()
     assert view.name_label.cget("text") == "Second"
     assert shown(view) == [["3", "4"], ["5", "6"]]
-    assert [view.preview.heading(c, "text") for c in view.preview["columns"]] == ["X", "Y"]
+    assert view.preview.heading_texts() == ["X", "Y"]
 
 
 # searching filters the preview, and clearing the box brings the rows back
@@ -293,13 +293,13 @@ def test_clicking_a_heading_sorts_and_clicking_again_reverses(make_view):
     view = make_view([table("T", rows)])
     view._sort_by(1)
     assert [r[1] for r in shown(view)] == ["$9", "$10", "$100"]
-    assert view.preview.heading("1", "text").startswith("Price") and ARROW_UP in view.preview.heading("1", "text")
+    assert view.preview.heading_texts()[1].startswith("Price") and ARROW_UP in view.preview.heading_texts()[1]
     view._sort_by(1)
     assert [r[1] for r in shown(view)] == ["$100", "$10", "$9"]
-    assert ARROW_DOWN in view.preview.heading("1", "text")
+    assert ARROW_DOWN in view.preview.heading_texts()[1]
     view._sort_by(0)                                               # a different column starts ascending
     assert [r[0] for r in shown(view)] == ["a", "b", "c"]
-    assert ARROW_UP not in view.preview.heading("1", "text")
+    assert ARROW_UP not in view.preview.heading_texts()[1]
 
 
 # search and sort can be used at the same time
@@ -330,7 +330,7 @@ def test_big_tables_show_a_capped_preview_but_copy_everything(make_view, app):
     rows = [[f"row {i}", str(i)] for i in range(MAX_PREVIEW_ROWS + 500)]
     notes = []
     view = make_view([table("Big", rows)], notify=notes.append)
-    assert len(view.preview.get_children()) == MAX_PREVIEW_ROWS
+    assert len(view.preview.rows) == MAX_PREVIEW_ROWS
     assert f"first {MAX_PREVIEW_ROWS:,} of {MAX_PREVIEW_ROWS + 500:,} rows" in view.footer_label.cget("text")
     view.copy_table()
     copied = view.clipboard_get().splitlines()
@@ -365,8 +365,8 @@ def test_copy_with_nothing_to_copy_does_nothing(make_view):
 
 def test_numbers_are_right_aligned_and_text_left_aligned(make_view):
     view = make_view([table("T", [["a", "$1"], ["b", "$22"], ["c", "$3"]])])
-    assert str(view.preview.column("0", "anchor")) == "w"
-    assert str(view.preview.column("1", "anchor")) == "e"
+    assert view.preview.aligns[0] == "w"
+    assert view.preview.aligns[1] == "e"
 
 
 # braces, backslashes and leading zeros show up exactly as written
@@ -393,7 +393,7 @@ def test_loading_new_tables_replaces_the_old_ones(make_view):
 def test_a_table_with_no_rows_still_previews_its_headers(make_view):
     view = make_view([table("Empty", [], headers=("A", "B"))])
     assert shown(view) == [] and view.size_label.cget("text") == "0 rows \u00d7 2 columns"
-    assert [view.preview.heading(c, "text") for c in view.preview["columns"]] == ["A", "B"]
+    assert view.preview.heading_texts() == ["A", "B"]
 
 
 # -- swapping versions and telling the window about changes
@@ -486,7 +486,7 @@ def three(name="T"):
 # the column names currently showing in the preview
 
 def headings(view):
-    return [view.preview.heading(c, "text") for c in view.preview["columns"]]
+    return view.preview.heading_texts()
 
 
 # -- hiding, renaming and resetting columns
@@ -683,25 +683,39 @@ def test_the_column_menu_has_the_three_actions(make_view):
 
 # right-click opens the menu on a real heading only (the pop-up and click position are faked)
 
-def test_right_click_on_a_heading_opens_the_menu_and_elsewhere_does_not(make_view, monkeypatch):
+def test_right_click_on_a_heading_opens_the_menu_for_that_column(make_view, monkeypatch):
     view = make_view([three()])
-    view.update()
+    posted = []
+    monkeypatch.setattr("tkinter.Menu.tk_popup", lambda self, x, y: posted.append((x, y)))
+    seen = []
+    real = view.build_column_menu
+    monkeypatch.setattr(view, "build_column_menu", lambda position: seen.append(position) or real(position))
+    view._open_column_menu(1, 100, 200)
+    assert posted == [(100, 200)] and seen == [1]
+
+
+# a position that doesn't exist, or no table at all, opens nothing
+def test_right_click_with_a_bad_position_or_no_table_opens_nothing(make_view, monkeypatch):
+    posted = []
+    monkeypatch.setattr("tkinter.Menu.tk_popup", lambda self, x, y: posted.append((x, y)))
+    view = make_view([three()])
+    view._open_column_menu(9, 1, 1)
+    view._open_column_menu(-1, 1, 1)
+    make_view()._open_column_menu(0, 1, 1)
+    assert posted == []
+
+
+# the grid's own right-click on a heading reaches the same menu
+def test_right_clicking_a_real_heading_reaches_the_table_view(make_view, monkeypatch):
+    view = make_view([three()])
     posted = []
     monkeypatch.setattr("tkinter.Menu.tk_popup", lambda self, x, y: posted.append((x, y)))
 
     class Event:
-        x, y, x_root, y_root = 30, 5, 100, 200
+        x, y, x_root, y_root = 10, 5, 70, 80
 
-    monkeypatch.setattr(view.preview, "identify_region", lambda x, y: "heading")
-    monkeypatch.setattr(view.preview, "identify_column", lambda x: "#2")
-    view._on_preview_right_click(Event)
-    assert posted == [(100, 200)]
-    monkeypatch.setattr(view.preview, "identify_region", lambda x, y: "cell")
-    view._on_preview_right_click(Event)
-    monkeypatch.setattr(view.preview, "identify_region", lambda x, y: "heading")
-    monkeypatch.setattr(view.preview, "identify_column", lambda x: "#9")
-    view._on_preview_right_click(Event)
-    assert len(posted) == 1
+    view.preview._on_header_right_click(Event)
+    assert posted == [(70, 80)]
 
 
 # the right-click tip shows and the footer stays empty
@@ -849,193 +863,88 @@ def test_an_empty_column_has_no_most_common_text():
     assert pw.profile_rows(t) == [("A", "empty", "0", "2", "0", "", "", "", "")]
 
 
-# -- sideways scrolling: only the columns that fit are drawn, one column per scroll step
+# -- column widths: narrower by default, and the ones you drag are remembered
 
-# everything fits: draw it all
-def test_column_window_shows_all_columns_when_they_fit():
-    assert column_window([100, 100, 100], 0, 1000) == (0, 3)
-    assert column_window([100, 100, 100], 0, 300) == (0, 3)      # exactly full still fits
-
-
-# only whole columns are drawn
-def test_column_window_stops_before_a_column_that_does_not_fit():
-    assert column_window([100] * 5, 0, 250) == (0, 2)
-    assert column_window([100] * 5, 1, 250) == (1, 3)
+# the starting width is the widest text, but never wider than COLUMN_MAX
+def test_columns_start_narrow_and_never_wider_than_the_cap(make_view):
+    long = "x" * 200
+    view = make_view([table("T", [[long, "a"], ["b", "c"]], headers=("Long", "Short"))])
+    long_width, short_width = view.preview.widths
+    assert long_width == COLUMN_MAX
+    assert COLUMN_MIN <= short_width < COLUMN_MAX
 
 
-# near the right edge the window slides back so there is no empty gap
-def test_column_window_fills_the_space_at_the_right_edge():
-    assert column_window([100] * 5, 4, 250) == (3, 5)
-    assert column_window([100] * 5, 3, 250) == (3, 5)
+# even an empty or tiny column keeps a usable width
+def test_columns_never_start_narrower_than_the_minimum(make_view):
+    view = make_view([table("T", [["", ""]], headers=("", ""))])
+    assert all(width >= COLUMN_MIN for width in view.preview.widths)
 
 
-# the slide-back only happens at the right edge, never when more columns still sit on the right
-def test_column_window_does_not_slide_back_when_more_columns_follow():
-    assert column_window([50, 100, 100, 300], 1, 260) == (1, 3)
+# dragging a heading's edge sets that column's width, and it survives sorting and searching
+def test_a_dragged_width_is_remembered(make_view):
+    view = make_view([three()])
+    view.preview.set_column_width(1, 333)
+    view.preview.on_resize(1, 333)
+    view._sort_by(0)
+    assert view.preview.widths[1] == 333
+    view.search_var.set("a1")
+    view._apply_search()
+    assert view.preview.widths[1] == 333
 
 
-# a column that fits exactly counts as fitting, also when sliding back
-def test_column_window_slides_back_into_an_exact_fit():
-    assert column_window([100] * 5, 4, 200) == (3, 5)
+# the width belongs to the column, not to its position, so hiding another column doesn't move it
+def test_a_dragged_width_stays_with_its_column_when_another_is_hidden(make_view):
+    view = make_view([three()])
+    view.preview.on_resize(2, 321)                                 # the column named C
+    view.hide_column(0)
+    assert view.preview.heading_texts() == ["B", "C"]
+    assert view.preview.widths[1] == 321
+    view.preview.on_resize(0, 222)                                 # now position 0 is the column named B
+    assert view._widths[0] == {2: 321, 1: 222}
 
 
-# a column wider than the grid still gets drawn, alone
-def test_column_window_always_draws_at_least_one_column():
-    assert column_window([500, 500], 0, 100) == (0, 1)
-    assert column_window([500, 500], 1, 100) == (1, 2)
+# widths are per table
+def test_a_dragged_width_belongs_to_one_table(make_view):
+    view = make_view([three("One"), three("Two")])
+    view.preview.on_resize(0, 250)
+    view.table_list.selection_set("1")
+    view.update()
+    assert view.preview.widths[0] != 250
+    view.table_list.selection_set("0")
+    view.update()
+    assert view.preview.widths[0] == 250
 
 
-# a start position that is out of range is pulled back in
-def test_column_window_clamps_the_start():
-    assert column_window([100] * 3, 99, 1000) == (0, 3)
-    assert column_window([100] * 3, -5, 1000) == (0, 3)
+# Reset columns also undoes dragged widths, and a new page starts fresh
+def test_reset_columns_and_new_tables_forget_dragged_widths(make_view):
+    view = make_view([three()])
+    view.preview.on_resize(0, 250)
+    view.reset_columns()
+    assert view.preview.widths[0] != 250
+    view.preview.on_resize(0, 250)
+    view.set_tables([three()])
+    assert view.preview.widths[0] != 250
 
 
-# no columns, no window
-def test_column_window_with_no_columns():
-    assert column_window([], 0, 500) == (0, 0)
+# the cap is narrower than the old 320 pixels
+def test_the_column_cap_is_narrow():
+    assert COLUMN_MAX <= 220
 
 
-# a table with 10 columns (each pretending to be 100 px wide) in a grid we pretend is 350 px wide: 3 fit
-@pytest.fixture
-def wide_view(make_view, monkeypatch):
-    headers = [f"H{i}" for i in range(10)]
-    wide = Table("Wide", headers, [[f"r{r}c{c}" for c in range(10)] for r in range(3)])
-    view = make_view([wide])
-    monkeypatch.setattr(view.preview, "winfo_width", lambda: 350)
-    view._col_widths = [100] * 10
-    view._apply_columns()
-    return view
+# choosing another table scrolls the preview back to the top left
+def test_choosing_another_table_scrolls_back_to_the_top_left(make_view):
+    rows = [[f"r{r}", "x"] for r in range(200)]
+    view = make_view([table("Long", rows), table("Other", [["a", "b"]])])
+    view.preview.body.yview_scroll(10, "units")
+    assert view.preview.body.canvasy(0) > 0
+    view.table_list.selection_set("1")
+    view.update()
+    assert view.preview.body.canvasy(0) == 0
 
 
-def shown_columns(view):
-    return [view.preview.heading(c, "text") for c in view.preview.cget("displaycolumns")]
-
-
-# not mapped yet (width 1): draw everything, like before
-def test_all_columns_are_drawn_when_the_grid_has_no_size_yet(make_view):
-    headers = [f"H{i}" for i in range(10)]
-    view = make_view([Table("Wide", headers, [[str(c) for c in range(10)]])])
-    assert len(shown_columns(view)) == 10
-    assert view.x_scroll.get() == (0.0, 1.0)
-
-
-# only some of the 10 columns are drawn, the first ones
-def test_only_the_columns_that_fit_are_drawn(wide_view):
-    names = shown_columns(wide_view)
-    assert 0 < len(names) < 10 and names[0] == "H0"
-    first, last = wide_view.x_scroll.get()
-    assert first == 0 and 0 < last < 1
-
-
-# the arrows move one column at a time
-def test_scrolling_by_units_moves_one_column(wide_view):
-    wide_view._on_xscroll("scroll", "1", "units")
-    assert shown_columns(wide_view)[0] == "H1"
-    wide_view._on_xscroll("scroll", "-1", "units")
-    assert shown_columns(wide_view)[0] == "H0"
-    wide_view._on_xscroll("scroll", "-1", "units")
-    assert shown_columns(wide_view)[0] == "H0"                     # can't go before the first
-
-
-# a click in the trough moves a page: what's on screen minus one column
-def test_scrolling_by_pages(wide_view):
-    assert len(shown_columns(wide_view)) == 3
-    wide_view._on_xscroll("scroll", "1", "pages")
-    assert shown_columns(wide_view)[0] == "H2"
-
-
-# dragging the thumb jumps to the matching column
-def test_dragging_the_scroll_bar_jumps_to_a_column(wide_view):
-    wide_view._on_xscroll("moveto", "0.5")
-    assert shown_columns(wide_view)[0] == "H5"
-    wide_view._on_xscroll("moveto", "0.57")                        # 5.7 rounds to column 6
-    assert shown_columns(wide_view)[0] == "H6"
-    wide_view._on_xscroll("moveto", "0")
-    assert shown_columns(wide_view)[0] == "H0"
-
-
-# at the far right the last column is visible and the thumb is at the end
-def test_scrolling_to_the_end_shows_the_last_column(wide_view):
-    wide_view._on_xscroll("moveto", "1")
-    assert shown_columns(wide_view)[-1] == "H9"
-    assert wide_view.x_scroll.get()[1] == 1.0
-
-
-# Shift + wheel scrolls sideways one column per notch
-def test_shift_wheel_scrolls_sideways(wide_view):
-    class Notch:
-        delta = -120
-
-    assert wide_view._on_shift_wheel(Notch) == "break"
-    assert shown_columns(wide_view)[0] == "H1"
-    Notch.delta = 120
-    wide_view._on_shift_wheel(Notch)
-    assert shown_columns(wide_view)[0] == "H0"
-
-
-# scrolling sideways never changes the rows
-def test_scrolling_sideways_keeps_every_row(wide_view):
-    before = len(wide_view.preview.get_children())
-    wide_view._on_xscroll("scroll", "2", "units")
-    assert len(wide_view.preview.get_children()) == before == 3
-
-
-# a wider grid fits more columns
-def test_resizing_the_grid_changes_how_many_columns_show(wide_view, monkeypatch):
-    few = len(shown_columns(wide_view))
-    assert few == 3
-    monkeypatch.setattr(wide_view.preview, "winfo_width", lambda: 5000)
-    wide_view._after_resize()
-    assert len(shown_columns(wide_view)) == 10 > few
-
-
-# right-click positions count from the first drawn column, not from column 0
-def test_right_click_position_follows_the_scroll(wide_view, monkeypatch):
-    wide_view._on_xscroll("scroll", "3", "units")
-    seen = []
-    monkeypatch.setattr(wide_view, "build_column_menu", lambda position: seen.append(position) or tk_menu(wide_view))
-    monkeypatch.setattr("tkinter.Menu.tk_popup", lambda self, x, y: None)
-    monkeypatch.setattr(wide_view.preview, "identify_region", lambda x, y: "heading")
-    monkeypatch.setattr(wide_view.preview, "identify_column", lambda x: "#2")
-
-    class Event:
-        x, y, x_root, y_root = 10, 5, 0, 0
-
-    wide_view._on_preview_right_click(Event)
-    assert seen == [4]                                             # first drawn is H3, so #2 is H4
-
-
-def tk_menu(parent):
-    import tkinter as tk
-    return tk.Menu(parent, tearoff=False)
-
-
-# a new table starts scrolled to the left
-def test_a_new_table_starts_at_the_first_column(wide_view):
-    wide_view._on_xscroll("scroll", "4", "units")
-    wide_view.set_tables([Table("Other", [f"X{i}" for i in range(10)], [[str(i) for i in range(10)]])])
-    assert shown_columns(wide_view)[0] == "X0"
-
-
-# hiding a column while scrolled keeps the window inside the table
-def test_hiding_a_column_while_scrolled_keeps_a_valid_window(wide_view):
-    wide_view._on_xscroll("moveto", "1")
-    wide_view.hide_column(len(shown_columns(wide_view)) - 1 + wide_view._first_column)
-    names = shown_columns(wide_view)
-    assert names and "H9" not in names
-
-
-# sorting from a heading while scrolled keeps your place
-def test_sorting_keeps_the_scroll_position(wide_view):
-    wide_view._on_xscroll("scroll", "2", "units")
-    wide_view._sort_by(3)
-    assert shown_columns(wide_view)[0] == "H2"
-
-
-# no table: the scroll bar is full and nothing breaks
-def test_scroll_bar_with_no_table(make_view):
-    view = make_view()
-    view._on_xscroll("scroll", "1", "units")
-    view._on_xscroll("moveto", "0.5")
-    assert view.x_scroll.get() == (0.0, 1.0)
+# a resize report for a column that isn't there is ignored
+def test_a_resize_report_with_a_bad_position_is_ignored(make_view):
+    view = make_view([three()])
+    view._remember_width(9, 100)
+    make_view()._remember_width(0, 100)
+    assert view._widths == {}

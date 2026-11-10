@@ -1,4 +1,4 @@
-# Tests for siphon_app/core/profile.py: the per-column summary
+# Tests for siphon_app/core/profile.py: the per-column summary.
 import pytest
 
 from siphon_app.core.models import Table

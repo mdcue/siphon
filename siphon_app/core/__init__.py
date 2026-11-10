@@ -1,1 +1,1 @@
-"""The scraping engine. Nothing here may import tkinter."""
+"""The scraping engine. Nothing in this package may import tkinter."""

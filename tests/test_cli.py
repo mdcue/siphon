@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from siphon_app import cli
 from siphon_app.cli import FAILED, OK, USAGE, looks_like_file, parse_numbers, run, table_line
 from siphon_app.core.fetcher import FetchedPage, FetchError
 from siphon_app.core.models import Table
@@ -216,3 +217,29 @@ def test_python_dash_m_runs_the_command_line_without_tkinter(page_file, tmp_path
         capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr
     assert Path(result.stdout.strip()).name == "Prices.csv"
+
+
+# -- started with nothing to do (a double-click on siphon-cli.exe)
+
+def test_main_with_no_arguments_shows_the_help_and_exits_with_a_usage_code(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["siphon"])
+    monkeypatch.setattr(cli, "opened_by_double_click", lambda: False)
+    with pytest.raises(SystemExit) as stop:
+        cli.main()
+    assert stop.value.code == USAGE
+    assert "usage: siphon" in capsys.readouterr().out
+
+
+def test_a_double_clicked_console_waits_before_closing(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["siphon"])
+    monkeypatch.setattr(cli, "opened_by_double_click", lambda: True)
+    asked = []
+    monkeypatch.setattr("builtins.input", lambda prompt="": asked.append(prompt) or "")
+    with pytest.raises(SystemExit):
+        cli.main()
+    assert len(asked) == 1
+
+
+def test_a_double_click_is_only_ever_detected_on_windows():
+    if sys.platform != "win32":
+        assert cli.opened_by_double_click() is False

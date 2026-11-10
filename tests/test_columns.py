@@ -1,8 +1,9 @@
-# Tests for siphon_app/core/columns.py: hiding and renaming columns on a copy
+# Tests for siphon_app/core/columns.py: hiding and renaming columns on a copy.
 import pytest
 
 from siphon_app.core.columns import ColumnError, clean_name, reshape, visible_columns
 from siphon_app.core.models import Table
+
 
 def make():
     return Table("T", ["A", "B", "C"], [[1, "x", "p"], [2, "y", "q"]],

@@ -1,12 +1,20 @@
-"""Reads a saved web page so its tables can be used like a downloaded one."""
+"""
+siphon_app/core/localfile.py
+
+Reads a web page you saved from your browser (File > Save As) so its tables can be used
+exactly like a downloaded page. Handy for pages that need a login or build their tables
+with JavaScript: open them in your browser, save them, and open the file here.
+Nothing here knows about windows or buttons.
+"""
 from pathlib import Path
 
 from siphon_app.core.fetcher import MAX_BYTES, FetchedPage, FetchError
 
 HTML_EXTENSIONS = (".html", ".htm", ".xhtml")
 
+
 def read_html_file(path: str | Path) -> FetchedPage:
-    """Read the file as a FetchedPage, or raise FetchError."""
+    """Return the file as a FetchedPage, or raise FetchError with a message safe to show."""
     path = Path(path)
     if path.is_dir():
         raise FetchError("That is a folder, not a saved web page.")
@@ -20,7 +28,7 @@ def read_html_file(path: str | Path) -> FetchedPage:
         if path.stat().st_size > MAX_BYTES:
             raise FetchError(limit_text)
         with open(path, "rb") as handle:
-            content = handle.read(MAX_BYTES + 1) # one extra byte tells us if the file grew while reading
+            content = handle.read(MAX_BYTES + 1)      # one extra byte tells us if the file grew while reading
     except PermissionError:
         raise FetchError("Couldn't read that file. It may be open in another program or protected.") from None
     except OSError as error:

@@ -16,8 +16,9 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, CData, NavigableString, Tag
 
+from siphon_app.core.fetcher import FetchError
 from siphon_app.core.models import Table
 
 if TYPE_CHECKING:                       # only for type hints, so nothing is imported at run time
@@ -31,6 +32,11 @@ PARSER = "lxml"
 BIG_SPAN = 30            # a colspan above this means "the whole row" (sites write 99, 1000...)
 MAX_COLUMNS = 200        # safety limit so a nasty page can't make a giant grid
 MAX_NAME_LENGTH = 100    # longer table names get cut with "..."
+MAX_NESTING = 1000       # real pages nest a few hundred levels at most; a page far past that is an attack or broken
+
+# Tags that are normally closed explicitly. Tags like <p>, <li> and <td> are left out on purpose:
+# older pages often skip their end tags, and that must not look like deep nesting.
+_NESTING_TAGS = re.compile(rb"<(/?)(?:div|span|table|font|center|ul|ol|blockquote|section|article|form)\b", re.IGNORECASE)
 
 DROP_TAGS = ["script", "style", "noscript", "template"]    # thrown away along with everything inside them
 HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"]
@@ -74,6 +80,7 @@ def parse_tables(markup: bytes | str, source_url: str = "", encoding: str | None
     markup:   the page, as raw bytes (best) or text
     encoding: a charset to try first, e.g. the one from the HTTP header
     """
+    _check_nesting(markup)
     options = {"from_encoding": encoding} if encoding and isinstance(markup, bytes) else {}
     soup = BeautifulSoup(markup, PARSER, **options)
     _prepare(soup)
@@ -116,26 +123,72 @@ def charset_from_content_type(content_type: str) -> str | None:
 
 # ---- reading the HTML -------------------------------------------------------
 
-def _prepare(soup: BeautifulSoup) -> None:
-    """Tidy the whole page once, before any table is read.
+def _check_nesting(markup: bytes | str) -> None:
+    """Refuse a page that stacks tags absurdly deep, before the slow part starts.
 
-    It's a single scan on purpose: every scan of a big page costs real time.
+    Reading such a page takes far longer the deeper it goes (50,000 nested <div>s takes over a
+    minute), and the worker thread can't be cancelled in the middle of reading. A quick count of
+    open and close tags is cheap, so we do that first.
     """
-    for tag in soup.find_all(DROP_TAGS + ["br"] + BLOCK_TAGS):
-        if tag.decomposed:                      # it was inside something we already removed
-            continue
-        if tag.name in DROP_TAGS:
-            tag.decompose()                     # their text is code or notices, not table content
-        elif tag.name == "br":
-            tag.replace_with(" ")
-        else:
-            tag.insert_before(" ")
-            tag.insert_after(" ")
+    data = markup if isinstance(markup, bytes) else markup.encode("utf-8", "ignore")
+    depth = 0
+    for match in _NESTING_TAGS.finditer(data):
+        depth = max(0, depth + (-1 if match.group(1) else 1))
+        if depth > MAX_NESTING:
+            raise FetchError(f"That page nests its elements more than {MAX_NESTING:,} levels deep, "
+                             "which no normal page does, so siphon didn't read it.")
+
+
+def _prepare(soup: BeautifulSoup) -> None:
+    """Throw away the tags whose text is code or notices, not table content (scripts, styles...).
+
+    One scan, and nothing else is changed in the page: spacing around <p>, <div> and <br> is
+    added later, while the text is read (see _cell_text). Changing the page for every such
+    tag made big pages slow, because each change has to search its parent's whole child list.
+    """
+    for tag in soup.find_all(DROP_TAGS):
+        if not _removed(tag):                   # skip ones already gone inside a removed parent
+            tag.decompose()
+
+
+def _removed(tag) -> bool:
+    """True if the tag was thrown away along with a parent we decomposed.
+
+    Not tag.decomposed: for a tag that is still alive, BeautifulSoup answers that by searching
+    everything inside it, which made deeply nested pages take minutes (every level re-scans
+    the levels below). Decomposing marks a tag in its own dictionary, so we can just look there.
+    """
+    return "_decomposed" in vars(tag)
 
 
 def _cell_text(tag) -> str:
-    """The visible text of a tag, with whitespace squashed down to single spaces."""
-    text = tag.get_text("").replace("\u200b", "")      # zero-width spaces are invisible junk
+    """The visible text of a tag, with whitespace squashed down to single spaces.
+
+    A space goes in around block tags and <br>, so "Hello<p>World" reads "Hello World". The walk
+    uses its own stack instead of recursion, so a deeply nested page can't crash it.
+    """
+    pieces: list[str] = []
+    walk = [iter(tag.contents)]
+    closing: list[bool] = []                    # for each open tag below the start: is it a block?
+    while walk:
+        for child in walk[-1]:
+            if isinstance(child, Tag):
+                if child.name == "br":
+                    pieces.append(" ")
+                elif child.name not in DROP_TAGS:
+                    is_block = child.name in BLOCK_TAGS
+                    if is_block:
+                        pieces.append(" ")
+                    closing.append(is_block)
+                    walk.append(iter(child.contents))
+                    break                       # go inside it; we come back to this level when it is done
+            elif type(child) in (NavigableString, CData):   # not comments or doctypes
+                pieces.append(str(child))
+        else:
+            walk.pop()
+            if closing and closing.pop():
+                pieces.append(" ")
+    text = "".join(pieces).replace("\u200b", "")       # zero-width spaces are invisible junk
     return re.sub(r"\s+", " ", text).strip()           # \s also catches non-breaking spaces
 
 

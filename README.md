@@ -2,7 +2,6 @@
 
 Pull the tables off a web page and save them as CSV, Excel or JSON. A small Windows desktop app, with a command-line mode for scripts.
 
-<!-- Screenshots go in docs/screenshots/. Names used below: main.png, profile.png, dark.png -->
 ![Siphon showing a table from a web page](docs/screenshots/main.png)
 
 ## What it does
@@ -16,6 +15,10 @@ Pull the tables off a web page and save them as CSV, Excel or JSON. A small Wind
 - Light and dark themes. It remembers your folder, format, theme, window size and recent addresses.
 
 ![The Profile window](docs/screenshots/profile.png)
+
+The dark theme:
+
+![Siphon in the dark theme](docs/screenshots/dark.png)
 
 ## Download
 

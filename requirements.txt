@@ -1,5 +1,6 @@
-streamlit
-pandas
 requests
 beautifulsoup4
+lxml
 openpyxl
+ttkbootstrap>=2.2
+platformdirs

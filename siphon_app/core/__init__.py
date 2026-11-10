@@ -1,0 +1,1 @@
+"""The scraping engine. Nothing in this package may import tkinter."""

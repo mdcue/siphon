@@ -131,7 +131,7 @@ def test_a_redraw_after_scrolling_draws_the_cells_around_the_new_view(make_grid)
     rows = [[f"r{r}c{c}" for c in range(50)] for r in range(1000)]
     grid, _ = make_grid(headers=[f"H{c}" for c in range(50)], rows=rows, widths=[100] * 50, aligns=["w"] * 50)
     grid.body.yview_scroll(100, "units")
-    grid.body.xview_scroll(100, "units")                          # 100 clicks of 24 px = 2,400 px: column 24
+    grid.body.xview_scroll(2400, "units")                         # 1 unit = 1 px: 2,400 px is column 24
     grid._redraw()
     cells = {(r, c) for r, c, _ in grid.drawn}
     assert (100, 24) in cells and (0, 0) not in cells
@@ -179,10 +179,10 @@ def test_scrolling_past_the_drawn_area_redraws(make_grid, direction):
     grid, _ = make_grid(headers=[f"H{c}" for c in range(50)], rows=rows, widths=[100] * 50, aligns=["w"] * 50)
     if direction in ("up", "left"):                               # first go somewhere, so there is room to go back
         grid.body.yview_scroll(300, "units")
-        grid.body.xview_scroll(200, "units")
+        grid.body.xview_scroll(4800, "units")
         grid._redraw()
     before = grid.drawn
-    far = {"down": ("y", 100), "right": ("x", 100), "up": ("y", -100), "left": ("x", -100)}[direction]
+    far = {"down": ("y", 100), "right": ("x", 2400), "up": ("y", -100), "left": ("x", -2400)}[direction]
     getattr(grid.body, f"{far[0]}view_scroll")(far[1], "units")
     grid.update_idletasks()
     grid.update_idletasks()
@@ -341,6 +341,34 @@ def test_wheel_scrolls_rows_and_shift_wheel_scrolls_sideways(make_grid):
     grid.update_idletasks()                                       # Tk tells the headings at idle time
     assert grid.body.canvasx(0) > 0
     assert grid.header.canvasx(0) == grid.body.canvasx(0)         # the headings follow
+
+
+# Shift + wheel and the arrow keys move one whole column at a time
+def test_sideways_scrolling_lands_on_column_edges(make_grid):
+    rows = [[f"r{r}c{c}" for c in range(30)] for r in range(10)]
+    widths = [100 + 10 * c for c in range(30)]
+    grid, _ = make_grid(headers=[f"H{c}" for c in range(30)], rows=rows, widths=widths, aligns=["w"] * 30)
+    grid._on_shift_wheel(Click(delta=-120))
+    assert grid.body.canvasx(0) == widths[0]
+    grid._on_key(("x", 1))
+    assert grid.body.canvasx(0) == widths[0] + widths[1]
+    grid._on_shift_wheel(Click(delta=120))
+    assert grid.body.canvasx(0) == widths[0]
+    grid._on_key(("x", -1))
+    assert grid.body.canvasx(0) == 0
+    grid._on_key(("x", -1))                                       # already at the start: stays put
+    assert grid.body.canvasx(0) == 0
+
+
+def test_going_left_from_the_middle_of_a_column_snaps_to_its_start(make_grid):
+    rows = [[f"r{r}c{c}" for c in range(30)] for r in range(10)]
+    grid, _ = make_grid(headers=[f"H{c}" for c in range(30)], rows=rows, widths=[100] * 30, aligns=["w"] * 30)
+    grid.body.xview_scroll(250, "units")                          # part-way into column 2
+    grid._on_key(("x", -1))
+    assert grid.body.canvasx(0) == 200
+    grid.body.xview_scroll(50, "units")
+    grid._on_key(("x", 1))
+    assert grid.body.canvasx(0) == 300
 
 
 # small wheel movements (touchpads) still move at least one notch

@@ -30,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="siphon",
         description="Pull the tables off a web page and save them as CSV, Excel or JSON.",
-        epilog="Run with no arguments to open the window instead.")
+        epilog="For the window, open siphon.exe (or run python -m siphon_app with nothing after it).")
     parser.add_argument("source", help="a web address, or a web page you saved (.html / .htm)")
     parser.add_argument("-f", "--format", choices=list(FORMATS), default="csv",
                         help="what to save as (default: csv)")

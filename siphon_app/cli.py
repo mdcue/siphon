@@ -151,11 +151,26 @@ def run(argv: list[str], out=None, err=None, fetch=polite_fetch) -> int:
     return OK
 
 
+def opened_by_double_click() -> bool:
+    """True on Windows when this program has a console all to itself, which is what a double-click gives it.
+    From cmd there are two programs sharing the console (cmd and us)."""
+    if sys.platform != "win32":
+        return False
+    import ctypes
+    room = (ctypes.c_uint * 4)()
+    return ctypes.windll.kernel32.GetConsoleProcessList(room, 4) <= 1
+
+
 def main() -> None:
     """Entry point used by __main__: run, then exit with the result."""
     for stream in (sys.stdout, sys.stderr):       # a Windows console can't print every character; don't crash on one
         if stream is not None and hasattr(stream, "reconfigure"):
             stream.reconfigure(errors="replace")
+    if len(sys.argv) == 1:                        # nothing to do: show how to use it
+        build_parser().print_help()
+        if opened_by_double_click():              # a double-clicked console closes at once, so hold it open
+            input("\nPress Enter to close this window.")
+        sys.exit(USAGE)
     try:
         code = run(sys.argv[1:])
     except KeyboardInterrupt:

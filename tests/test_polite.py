@@ -8,12 +8,13 @@ from siphon_app.core import fetcher, polite
 from siphon_app.core.fetcher import FetchCancelled, FetchedPage, FetchError, make_session
 from siphon_app.core.polite import PoliteFetcher, age_text, default_wait
 
+
 # a stand-in for a web response: status, body in chunks, and an optional error to raise
 
 class FakeResponse:
     def __init__(self, status=200, body=b"", boom=None):
         self.status_code, self.body, self.boom, self.closed = status, body, boom, False
-        self.sent = 0 # how many bytes were actually asked for
+        self.sent = 0                                  # how many bytes were actually asked for
 
     def iter_content(self, size):
         if self.boom:
@@ -24,6 +25,7 @@ class FakeResponse:
 
     def close(self):
         self.closed = True
+
 
 class FakeSession:
     """Answers robots.txt requests from a dictionary: {robots_url: FakeResponse or an Exception}."""
@@ -36,6 +38,7 @@ class FakeSession:
         if isinstance(answer, Exception):
             raise answer
         return answer
+
 
 # a fake clock: calling it gives 'now', and wait() just moves time forward and records the pause
 
@@ -50,16 +53,19 @@ class Clock:
         self.waits.append(round(seconds, 3))
         self.now += seconds
 
+
 # shorthand for a robots.txt response
 
 def robots(text, status=200):
     return FakeResponse(status, text.encode())
+
 
 # a fresh fake clock for each test
 
 @pytest.fixture
 def clock():
     return Clock()
+
 
 @pytest.fixture
 def downloads(monkeypatch):
@@ -73,13 +79,15 @@ def downloads(monkeypatch):
     monkeypatch.setattr(fetcher, "fetch", fake)
     return calls
 
+
 # build a PoliteFetcher wired to the fake session and clock
 
 def make(clock, answers=None):
     session = FakeSession(answers)
     return PoliteFetcher(session=session, clock=clock, wait=clock.wait), session
 
-# who we say we are
+
+# -- who we say we are
 
 # the User-Agent names siphon and links to the project page
 
@@ -87,13 +95,15 @@ def test_the_user_agent_says_who_is_visiting_and_where_to_find_them():
     agent = make_session().headers["User-Agent"]
     assert "siphon/" in agent and __url__ in agent and __url__.startswith("https://github.com/")
 
+
 # ages read as '1 second ago', '2 minutes ago' and so on
 
 def test_age_wording():
     assert age_text(0) == "0 seconds ago" and age_text(1) == "1 second ago" and age_text(59) == "59 seconds ago"
     assert age_text(60) == "1 minute ago" and age_text(125) == "2 minutes ago"
 
-# robots.txt
+
+# -- robots.txt
 
 # a site with no robots.txt is fine, and we asked for it once
 
@@ -102,6 +112,7 @@ def test_a_site_with_no_robots_file_is_fine(clock, downloads):
     page = pf.fetch("https://example.com/data")
     assert page.content == b"<html>page</html>" and downloads == ["https://example.com/data"]
     assert session.asked == ["https://example.com/robots.txt"]
+
 
 # a disallowed page gets a friendly refusal and is never downloaded
 
@@ -112,12 +123,14 @@ def test_a_disallowed_page_is_refused_with_a_friendly_message_and_never_download
     assert "example.com" in str(caught.value) and "robots.txt" in str(caught.value)
     assert "Open file" in str(caught.value) and downloads == []
 
+
 # pages that are not disallowed are still fetched
 
 def test_other_pages_on_the_same_site_are_still_allowed(clock, downloads):
     pf, _ = make(clock, {"https://example.com/robots.txt": robots("User-agent: *\nDisallow: /private")})
     pf.fetch("https://example.com/public")
     assert downloads == ["https://example.com/public"]
+
 
 # a rule aimed at siphon by name applies
 
@@ -126,12 +139,14 @@ def test_a_rule_aimed_at_siphon_by_name_applies(clock, downloads):
     with pytest.raises(FetchError):
         pf.fetch("https://example.com/anything")
 
+
 # a rule aimed at another robot does not apply to us
 
 def test_a_rule_aimed_at_another_robot_does_not_apply(clock, downloads):
     pf, _ = make(clock, {"https://example.com/robots.txt": robots("User-agent: otherbot\nDisallow: /")})
     pf.fetch("https://example.com/anything")
     assert downloads
+
 
 # a site that blocks everything blocks us too
 
@@ -140,6 +155,7 @@ def test_a_site_that_blocks_everything_blocks_us(clock, downloads):
     with pytest.raises(FetchError):
         pf.fetch("https://example.com/")
 
+
 # robots.txt is asked for once, then remembered
 
 def test_rules_are_remembered_so_robots_txt_is_asked_for_only_once(clock, downloads):
@@ -147,6 +163,7 @@ def test_rules_are_remembered_so_robots_txt_is_asked_for_only_once(clock, downlo
     pf.fetch("https://example.com/a")
     pf.fetch("https://example.com/b")
     assert session.asked == ["https://example.com/robots.txt"]
+
 
 # the rules are fetched again once the remembered copy is over an hour old
 
@@ -157,6 +174,7 @@ def test_rules_are_asked_for_again_after_an_hour(clock, downloads):
     pf.fetch("https://example.com/b")
     assert len(session.asked) == 2
 
+
 # just under an hour, the remembered rules are still used
 
 def test_rules_are_still_remembered_just_before_the_hour_is_up(clock, downloads):
@@ -165,6 +183,7 @@ def test_rules_are_still_remembered_just_before_the_hour_is_up(clock, downloads)
     clock.now += polite.ROBOTS_TTL - 1
     pf.fetch("https://example.com/b")
     assert len(session.asked) == 1
+
 
 # each site has its own rules
 
@@ -175,12 +194,14 @@ def test_every_site_has_its_own_rules(clock, downloads):
         pf.fetch("https://blocked.com/x")
     assert sorted(session.asked) == ["https://blocked.com/robots.txt", "https://open.com/robots.txt"]
 
+
 # the port stays in the robots.txt address
 
 def test_the_port_is_kept_when_asking_for_robots_txt(clock, downloads):
     pf, session = make(clock)
     pf.fetch("http://localhost:8000/page")
     assert session.asked == ["http://localhost:8000/robots.txt"]
+
 
 # a missing or forbidden robots.txt means everything is allowed, and that answer is remembered
 
@@ -189,7 +210,8 @@ def test_a_missing_or_forbidden_robots_file_means_everything_is_allowed(clock, d
     pf, session = make(clock, {"https://example.com/robots.txt": FakeResponse(status, b"User-agent: *\nDisallow: /")})
     pf.fetch("https://example.com/a")
     pf.fetch("https://example.com/b")
-    assert len(downloads) == 2 and len(session.asked) == 1 # and that answer is remembered
+    assert len(downloads) == 2 and len(session.asked) == 1          # and that answer is remembered
+
 
 # server errors or network trouble do not stop the page, and the next fetch tries robots.txt again
 
@@ -200,7 +222,8 @@ def test_trouble_getting_robots_txt_does_not_stop_the_page_and_is_not_remembered
     pf, session = make(clock, {"https://example.com/robots.txt": trouble})
     pf.fetch("https://example.com/a")
     pf.fetch("https://example.com/b")
-    assert len(downloads) == 2 and len(session.asked) == 2 # asked again the second time
+    assert len(downloads) == 2 and len(session.asked) == 2          # asked again the second time
+
 
 # a garbage robots.txt does no harm
 
@@ -209,12 +232,14 @@ def test_a_garbage_robots_file_is_harmless(clock, downloads):
     pf.fetch("https://example.com/a")
     assert downloads
 
+
 # a huge robots.txt does not hang or crash us
 
 def test_a_huge_robots_file_is_only_read_up_to_the_limit(clock, downloads):
     pf, _ = make(clock, {"https://example.com/robots.txt": robots("User-agent: *\nDisallow: /late\n" + "#" * 2_000_000)})
     pf.fetch("https://example.com/early")
-    assert downloads # did not hang or crash
+    assert downloads                                                  # did not hang or crash
+
 
 # we stop reading robots.txt near the size limit instead of downloading all of it
 
@@ -224,6 +249,7 @@ def test_reading_stops_at_the_limit_instead_of_downloading_everything(clock, dow
     pf.fetch("https://example.com/a")
     assert polite.ROBOTS_MAX_BYTES <= response.sent < polite.ROBOTS_MAX_BYTES + 8192
 
+
 # rules past the size limit are ignored
 
 def test_rules_after_the_size_limit_are_ignored(clock, downloads):
@@ -231,6 +257,7 @@ def test_rules_after_the_size_limit_are_ignored(clock, downloads):
     pf, _ = make(clock, {"https://example.com/robots.txt": robots(filler + "User-agent: *\nDisallow: /")})
     pf.fetch("https://example.com/a")
     assert downloads
+
 
 # the robots.txt response is always closed
 
@@ -240,7 +267,8 @@ def test_the_robots_response_is_always_closed(clock, downloads):
     pf.fetch("https://example.com/a")
     assert response.closed
 
-# the pause between requests
+
+# -- the pause between requests
 
 # the first visit to a site does not wait
 
@@ -249,13 +277,15 @@ def test_the_first_visit_to_a_site_does_not_wait(clock, downloads):
     pf.fetch("https://example.com/a")
     assert clock.waits == []
 
-# a second page from the same site waits the minimum delay
+
+# a second page from the same site waits the minimum delay (the fake clock records the wait)
 
 def test_a_second_page_from_the_same_site_waits_the_minimum_delay(clock, downloads):
     pf, _ = make(clock)
     pf.fetch("https://example.com/a")
     pf.fetch("https://example.com/b")
     assert clock.waits == [polite.MIN_DELAY]
+
 
 # no wait is needed once enough time has passed
 
@@ -266,6 +296,7 @@ def test_no_wait_is_needed_once_enough_time_has_passed(clock, downloads):
     pf.fetch("https://example.com/b")
     assert clock.waits == []
 
+
 # only the time still left is waited
 
 def test_only_the_remaining_time_is_waited(clock, downloads):
@@ -274,6 +305,7 @@ def test_only_the_remaining_time_is_waited(clock, downloads):
     clock.now += 0.4
     pf.fetch("https://example.com/b")
     assert clock.waits == [pytest.approx(polite.MIN_DELAY - 0.4)]
+
 
 # even a short remaining wait is honoured
 
@@ -284,6 +316,7 @@ def test_even_a_short_remaining_wait_is_honoured(clock, downloads):
     pf.fetch("https://example.com/b")
     assert clock.waits == [pytest.approx(0.2)]
 
+
 # different sites never wait for each other
 
 def test_different_sites_never_wait_for_each_other(clock, downloads):
@@ -291,6 +324,7 @@ def test_different_sites_never_wait_for_each_other(clock, downloads):
     pf.fetch("https://one.com/a")
     pf.fetch("https://two.com/a")
     assert clock.waits == []
+
 
 # a Crawl-delay in robots.txt is obeyed
 
@@ -300,6 +334,7 @@ def test_a_crawl_delay_in_robots_txt_is_obeyed(clock, downloads):
     pf.fetch("https://example.com/b")
     assert clock.waits == [4.0]
 
+
 # a huge Crawl-delay is capped at the maximum
 
 def test_a_crawl_delay_is_capped(clock, downloads):
@@ -307,6 +342,7 @@ def test_a_crawl_delay_is_capped(clock, downloads):
     pf.fetch("https://example.com/a")
     pf.fetch("https://example.com/b")
     assert clock.waits == [polite.MAX_DELAY]
+
 
 # a tiny Crawl-delay never goes below the minimum
 
@@ -316,6 +352,7 @@ def test_a_tiny_crawl_delay_never_goes_below_the_minimum(clock, downloads):
     pf.fetch("https://example.com/b")
     assert clock.waits == [polite.MIN_DELAY]
 
+
 def test_time_slots_are_handed_out_one_after_another(clock):
     """Two jobs at the same moment (a cancelled one still running) must not both go at once."""
     pf, _ = make(clock)
@@ -323,6 +360,7 @@ def test_time_slots_are_handed_out_one_after_another(clock):
     assert pf._reserve("example.com", 2.0) == 2.0
     assert pf._reserve("example.com", 2.0) == 4.0
     assert pf._reserve("other.com", 2.0) == 0
+
 
 # the wait ends at once with a cancel if the stop flag is already set
 
@@ -332,7 +370,8 @@ def test_waiting_can_be_cancelled_at_once():
     with pytest.raises(FetchCancelled):
         default_wait(30, event)
 
-# with no cancel flag, waiting is just a sleep
+
+# with no cancel flag, waiting is just a sleep (sleep is replaced by a recorder)
 
 def test_waiting_without_a_cancel_flag_just_sleeps(monkeypatch):
     slept = []
@@ -340,22 +379,25 @@ def test_waiting_without_a_cancel_flag_just_sleeps(monkeypatch):
     default_wait(2.5, None)
     assert slept == [2.5]
 
+
 # the wait ends normally when nobody cancels
 
 def test_waiting_ends_normally_when_nobody_cancels():
     default_wait(0.01, threading.Event())
 
-# cancelling during the pause stops the fetch before it downloads
+
+# cancelling during the pause stops the fetch before it downloads (the fake wait raises a cancel)
 
 def test_cancelling_during_the_pause_stops_the_fetch_before_any_download(clock, downloads):
     pf = PoliteFetcher(session=FakeSession(), clock=clock,
                        wait=lambda seconds, event: (_ for _ in ()).throw(FetchCancelled("Cancelled.")))
-    pf.fetch("https://example.com/a") # first one: no wait
+    pf.fetch("https://example.com/a")                                # first one: no wait
     with pytest.raises(FetchCancelled):
         pf.fetch("https://example.com/b")
     assert downloads == ["https://example.com/a"]
 
-# the memory of recent pages
+
+# -- the memory of recent pages
 
 # the same page twice downloads once, and the second gets a note about its age
 
@@ -368,6 +410,7 @@ def test_the_same_page_twice_downloads_once(clock, downloads):
     assert second.content == first.content
     assert first.note == "" and "40 seconds ago" in second.note and "Ctrl+R" in second.note
 
+
 # the remembered copy expires after its time limit
 
 def test_the_remembered_copy_expires(clock, downloads):
@@ -376,6 +419,7 @@ def test_the_remembered_copy_expires(clock, downloads):
     clock.now += polite.CACHE_TTL + 1
     page = pf.fetch("https://example.com/a")
     assert len(downloads) == 2 and page.note == ""
+
 
 # at exactly the limit, the copy counts as expired
 
@@ -386,6 +430,7 @@ def test_the_remembered_copy_expires_at_exactly_the_limit(clock, downloads):
     pf.fetch("https://example.com/a")
     assert len(downloads) == 2
 
+
 # just before the limit, the copy is still used
 
 def test_the_remembered_copy_is_still_used_just_before_it_expires(clock, downloads):
@@ -394,6 +439,7 @@ def test_the_remembered_copy_is_still_used_just_before_it_expires(clock, downloa
     clock.now += polite.CACHE_TTL - 1
     pf.fetch("https://example.com/a")
     assert len(downloads) == 1
+
 
 # a remembered page does not touch the site at all, not even for robots.txt
 
@@ -404,6 +450,7 @@ def test_a_remembered_page_does_not_touch_the_site_at_all(clock, downloads):
     pf.fetch("https://example.com/a")
     assert (len(session.asked), clock.waits) == before
 
+
 # forget makes the next fetch go back to the site
 
 def test_forget_makes_the_next_fetch_go_to_the_site(clock, downloads):
@@ -412,6 +459,7 @@ def test_forget_makes_the_next_fetch_go_to_the_site(clock, downloads):
     pf.forget("https://example.com/a")
     pf.fetch("https://example.com/a")
     assert len(downloads) == 2
+
 
 # forget works on a loosely typed address too
 
@@ -422,12 +470,14 @@ def test_forgetting_works_even_for_a_loosely_typed_address(clock, downloads):
     pf.fetch("https://example.com/a")
     assert len(downloads) == 2
 
+
 # forgetting a bad or unknown address does no harm
 
 def test_forgetting_a_bad_address_or_an_unknown_one_is_harmless(clock):
     pf, _ = make(clock)
     pf.forget("mailto:me@example.com")
     pf.forget("https://never-seen.com/")
+
 
 # a loosely typed address shares the same remembered copy
 
@@ -437,6 +487,7 @@ def test_a_loosely_typed_address_shares_the_same_remembered_copy(clock, download
     pf.fetch("https://example.com/a")
     assert len(downloads) == 1
 
+
 # different pages are remembered separately
 
 def test_different_pages_are_remembered_separately(clock, downloads):
@@ -445,6 +496,7 @@ def test_different_pages_are_remembered_separately(clock, downloads):
     clock.now += 5
     pf.fetch("https://example.com/b")
     assert len(downloads) == 2
+
 
 # a failed download is not remembered (the fake downloader always fails)
 
@@ -463,6 +515,7 @@ def test_a_failed_download_is_not_remembered(clock, monkeypatch):
             pf.fetch("https://example.com/a")
     assert len(attempts) == 2
 
+
 # a refused page is not remembered, so it is refused again
 
 def test_a_refused_page_is_not_remembered_and_is_refused_again(clock, downloads):
@@ -470,6 +523,7 @@ def test_a_refused_page_is_not_remembered_and_is_refused_again(clock, downloads)
     for _ in range(2):
         with pytest.raises(FetchError):
             pf.fetch("https://example.com/a")
+
 
 # only a few pages are kept, and the oldest is dropped first
 
@@ -480,10 +534,11 @@ def test_only_a_few_pages_are_remembered_and_the_oldest_goes_first(clock, downlo
         pf.fetch(f"https://example.com/{i}")
     assert len(pf._pages) == polite.CACHE_MAX_PAGES
     count = len(downloads)
-    pf.fetch(f"https://example.com/{polite.CACHE_MAX_PAGES}") # the newest: still remembered
+    pf.fetch(f"https://example.com/{polite.CACHE_MAX_PAGES}")        # the newest: still remembered
     assert len(downloads) == count
-    pf.fetch("https://example.com/0") # the oldest: gone
+    pf.fetch("https://example.com/0")                                # the oldest: gone
     assert len(downloads) == count + 1
+
 
 # remembering a page again makes it the newest
 
@@ -492,10 +547,11 @@ def test_remembering_a_page_again_makes_it_the_newest(clock):
     page = FetchedPage(url="x", content=b"", content_type="")
     pf._remember("https://e.com/0", page)
     pf._remember("https://e.com/1", page)
-    pf._remember("https://e.com/0", page) # seen again: now the newest
+    pf._remember("https://e.com/0", page)                          # seen again: now the newest
     for i in range(2, polite.CACHE_MAX_PAGES + 1):
         pf._remember(f"https://e.com/{i}", page)
     assert "https://e.com/0" in pf._pages and "https://e.com/1" not in pf._pages
+
 
 # a page over the size limit is not remembered
 
@@ -513,6 +569,7 @@ def test_a_very_big_page_is_not_remembered(clock, monkeypatch):
     pf.fetch("https://example.com/a")
     assert len(calls) == 2
 
+
 # a page exactly at the size limit is remembered
 
 def test_a_page_exactly_at_the_size_limit_is_remembered(clock, monkeypatch):
@@ -528,6 +585,7 @@ def test_a_page_exactly_at_the_size_limit_is_remembered(clock, monkeypatch):
     pf.fetch("https://example.com/a")
     assert len(calls) == 1
 
+
 # a bad address is reported before any request is made
 
 def test_a_bad_address_is_reported_before_anything_else(clock, downloads):
@@ -536,7 +594,8 @@ def test_a_bad_address_is_reported_before_anything_else(clock, downloads):
         pf.fetch("mailto:me@example.com")
     assert session.asked == [] and downloads == []
 
-# the downloader gets the shared session and the cancel flag
+
+# the downloader gets the shared session and the cancel flag (a spy records them)
 
 def test_the_downloader_is_given_the_shared_session_and_the_cancel_flag(clock, monkeypatch):
     seen = {}
@@ -551,9 +610,10 @@ def test_the_downloader_is_given_the_shared_session_and_the_cancel_flag(clock, m
     pf.fetch("https://example.com/a", cancel_event=event)
     assert seen["session"] is session and seen["cancel_event"] is event
 
-# the shared one used by the window
 
-# the module-level functions use one shared fetcher
+# -- the shared one used by the window
+
+# the module-level functions use one shared fetcher (swapped for a test one)
 
 def test_the_module_level_functions_use_one_shared_fetcher(monkeypatch, clock, downloads):
     shared, _ = make(clock)
@@ -564,6 +624,7 @@ def test_the_module_level_functions_use_one_shared_fetcher(monkeypatch, clock, d
     polite.forget("https://example.com/a")
     polite.polite_fetch("https://example.com/a")
     assert len(downloads) == 2
+
 
 # the shared fetcher is created once and reused
 

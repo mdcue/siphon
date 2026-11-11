@@ -1,7 +1,6 @@
 """Shared test setup: one main window for all the window tests."""
 import pytest
 
-
 # built once per run, because making a Tk window is slow
 @pytest.fixture(scope="session")
 def app(tmp_path_factory):

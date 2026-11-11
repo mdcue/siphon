@@ -3,8 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from siphon_app.core.fetcher import FetchedPage
-from siphon_app.core.parser import charset_from_content_type, parse_page, parse_tables
+import time
+
+from siphon_app.core.fetcher import FetchedPage, FetchError
+from siphon_app.core.parser import MAX_NESTING, charset_from_content_type, parse_page, parse_tables
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -492,3 +494,75 @@ def test_huge_colspan_does_not_create_a_gigantic_table():
 def test_garbage_input_never_crashes(junk):
     parse_tables(junk)
     parse_tables(junk.encode("utf-8"))
+
+
+# -- hostile and huge pages: they must be refused or read quickly, never hang the app
+
+def timed(html):
+    started = time.perf_counter()
+    result = parse_tables(html)
+    return result, time.perf_counter() - started
+
+
+# a page nested far deeper than any real page is refused up front, with a worded message
+def test_a_page_nested_absurdly_deep_is_refused():
+    depth = MAX_NESTING + 1
+    html = "<table><tr><td>" + "<div>" * depth + "x" + "</div>" * depth + "</td></tr></table>"
+    started = time.perf_counter()
+    with pytest.raises(FetchError, match="levels deep"):
+        parse_tables(html)
+    assert time.perf_counter() - started < 2
+
+
+# a deep but believable page still works
+def test_ordinary_deep_nesting_is_fine():
+    depth = 200
+    cell = "<div>" * depth + "deep" + "</div>" * depth
+    table = one(f"<table><tr><th>A</th><th>B</th></tr><tr><td>{cell}</td><td>x</td></tr></table>")
+    assert table.rows[0] == ["deep", "x"]
+
+
+# a long page full of side-by-side (properly closed) divs is not deep: the count goes back down
+def test_many_closed_siblings_do_not_count_as_nesting():
+    html = "<div>a</div>" * (MAX_NESTING * 3) + "<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>"
+    assert one(html).rows == [["1", "2"]]
+
+
+# old pages that never close <p>, <li> or <td> are not "deep", however many there are
+def test_pages_with_many_unclosed_tags_are_not_mistaken_for_deep_nesting():
+    html = "<p>x" * 3000 + "<li>y" * 3000 + "<table><tr><th>A<th>B<tr><td>1<td>2</table>"
+    tables, seconds = timed(html)
+    assert tables[0].rows == [["1", "2"]]
+    assert seconds < 5
+
+
+# many of one tag side by side used to take minutes, because every one re-scanned its siblings
+@pytest.mark.parametrize("piece, where", [
+    ("a<br>", "cell"), ("<p>a</p>", "cell"), ("<script>x</script>", "page"), ("<tr><td>a<td>b", "table"),
+])
+def test_thousands_of_repeated_tags_are_read_quickly(piece, where):
+    count = 20000
+    if where == "cell":
+        html = "<table><tr><th>A</th><th>B</th></tr><tr><td>" + piece * count + "</td><td>x</td></tr></table>"
+    elif where == "page":
+        html = piece * count + "<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>"
+    else:
+        html = "<table><tr><th>A<th>B" + piece * count + "</table>"
+    tables, seconds = timed(html)
+    assert tables
+    assert seconds < 5
+
+
+# spacing around block tags and <br> is added while reading, and the page is left alone otherwise
+@pytest.mark.parametrize("cell, expected", [
+    ("Hello<p>World</p>again", "Hello World again"),
+    ("one<br>two", "one two"),
+    ("<b>Hel</b>lo", "Hello"),                                    # inline tags don't add a space
+    ("a<div><div>b</div></div>c", "a b c"),
+    ("x<script>alert(1)</script>y", "xy"),
+    ("x<!-- note -->y", "xy"),                                    # comments are not text
+    ("<ul><li>one</li><li>two</li></ul>", "one two"),
+])
+def test_text_is_spaced_around_blocks_and_breaks(cell, expected):
+    table = one(f"<table><tr><th>A</th><th>B</th></tr><tr><td>{cell}</td><td>z</td></tr></table>")
+    assert table.rows[0][0] == expected

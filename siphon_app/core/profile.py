@@ -13,7 +13,6 @@ from siphon_app.core.models import Cell, Table
 
 NUMBER, TEXT, EMPTY = "number", "text", "empty"     # the three kinds a column can be
 
-
 @dataclass
 class ColumnProfile:
     name: str
@@ -27,13 +26,11 @@ class ColumnProfile:
     common: str = ""                # the value that shows up most often
     common_count: int = 0           # ...and how many times it does
 
-
 def _is_empty(cell: Cell) -> bool:
     """A real number (even 0) is never empty. Text is empty if blank or a "no value" marker."""
     if isinstance(cell, (int, float)) and not isinstance(cell, bool):
         return False
     return is_missing(str(cell))
-
 
 def _as_number(cell: Cell) -> float | None:
     """The cell as a number, or None if it isn't one. Works on "$1,234" text and real numbers."""
@@ -43,7 +40,6 @@ def _as_number(cell: Cell) -> float | None:
         return float(cell)
     parsed = parse_number(str(cell))
     return None if parsed is None else float(parsed.value)
-
 
 def profile_column(name: str, cells: list[Cell]) -> ColumnProfile:
     filled_cells = [cell for cell in cells if not _is_empty(cell)]
@@ -60,11 +56,10 @@ def profile_column(name: str, cells: list[Cell]) -> ColumnProfile:
     # The stats only look at the cells that really are numbers.
     if len(numbers) / filled >= NUMERIC_SHARE:
         return ColumnProfile(name, NUMBER, filled, empty, len(counts),
-                             min(numbers), max(numbers), sum(numbers) / len(numbers),
-                             common, common_count)
+                            min(numbers), max(numbers), sum(numbers) / len(numbers),
+                            common, common_count)
     return ColumnProfile(name, TEXT, filled, empty, len(counts),
-                         common=common, common_count=common_count)
-
+                        common=common, common_count=common_count)
 
 def profile_table(table: Table) -> list[ColumnProfile]:
     """One profile per column, in column order."""

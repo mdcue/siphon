@@ -179,6 +179,13 @@ def test_help_and_version_exit_cleanly(capsys):
     assert go("--help")[0] == OK
 
 
+def test_a_page_that_cant_be_read_is_an_error_not_a_traceback(page_file):
+    deep = "<div>" * 1500 + "x" + "</div>" * 1500
+    code, out, err = go(page_file("<table><tr><td>" + deep + "</td></tr></table>"))
+    assert code == FAILED and out == ""
+    assert err.startswith("siphon: ") and "levels deep" in err
+
+
 # -- addresses (the download is swapped for a fake one)
 
 def test_an_address_is_tidied_and_downloaded():

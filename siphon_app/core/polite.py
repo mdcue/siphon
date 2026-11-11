@@ -29,14 +29,12 @@ CACHE_TTL = 300                 # seconds a downloaded page is remembered (5 min
 CACHE_MAX_PAGES = 10            # how many pages are remembered at once
 CACHE_MAX_BYTES = 5 * 1024 * 1024    # bigger pages are not remembered (keeps memory small)
 
-
 def default_wait(seconds: float, cancel_event: threading.Event | None) -> None:
     """Sleep, but wake up at once (and raise) if the person presses Cancel."""
     if cancel_event is None:
         time.sleep(seconds)
     elif cancel_event.wait(seconds):
         raise FetchCancelled("Cancelled.")
-
 
 def age_text(seconds: float) -> str:
     """'40 seconds ago', '1 minute ago', '3 minutes ago'."""
@@ -45,7 +43,6 @@ def age_text(seconds: float) -> str:
         return f"{seconds} second{'s' if seconds != 1 else ''} ago"
     minutes = seconds // 60
     return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
-
 
 class PoliteFetcher:
     """Wraps fetcher.fetch with robots.txt checks, a delay per site and a small page cache."""
@@ -59,8 +56,7 @@ class PoliteFetcher:
         self._next_slot: dict[str, float] = {}        # host -> earliest time of its next request
         self._pages: dict[str, tuple[float, FetchedPage]] = {}               # address -> (when, page)
 
-    # ---- the public part -------------------------------------------------------------
-
+    #the public part
     def fetch(self, url: str, cancel_event: threading.Event | None = None) -> FetchedPage:
         """Like fetcher.fetch, but polite. Raises FetchError (or FetchCancelled)."""
         url = normalize_url(url)
@@ -87,8 +83,7 @@ class PoliteFetcher:
         with self._lock:
             self._pages.pop(url, None)
 
-    # ---- the pause between requests --------------------------------------------------
-
+    #the pause between requests
     def _delay(self, rules: RobotFileParser | None) -> float:
         """Seconds to leave between requests: our minimum, or the site's Crawl-delay (capped)."""
         asked = rules.crawl_delay(ROBOT_NAME) if rules is not None else None
@@ -110,8 +105,7 @@ class PoliteFetcher:
         if wait > 0:
             self._wait(wait, cancel_event)
 
-    # ---- robots.txt ------------------------------------------------------------------
-
+    #robots.txt
     def _rules_for(self, url: str, host: str, cancel_event) -> RobotFileParser | None:
         """The site's robots.txt rules, or None when there are none (or we couldn't get them)."""
         with self._lock:
@@ -153,8 +147,7 @@ class PoliteFetcher:
         rules.parse(lines)
         return rules, True
 
-    # ---- the memory of recent pages --------------------------------------------------
-
+    #the memory of recent pages
     def _cached(self, url: str) -> FetchedPage | None:
         """A recent copy of the page (with a note saying so), or None if there isn't a fresh one."""
         with self._lock:
@@ -166,7 +159,7 @@ class PoliteFetcher:
                 del self._pages[url]
                 return None
             return replace(entry[1], note=f"Used the copy from {age_text(age)}; the site wasn't contacted. "
-                                          "Press Ctrl+R to download it again.")
+                                        "Press Ctrl+R to download it again.")
 
     def _remember(self, url: str, page: FetchedPage) -> None:
         """Keep the page for a while. Big pages are skipped, and the oldest copy is dropped when full."""
@@ -178,12 +171,9 @@ class PoliteFetcher:
             while len(self._pages) > CACHE_MAX_PAGES:
                 del self._pages[next(iter(self._pages))]       # the oldest goes first
 
-
-# ---- one shared fetcher for the whole program -------------------------------------------
-
+#one shared fetcher for the whole program
 _default: PoliteFetcher | None = None
 _default_lock = threading.Lock()
-
 
 def _shared() -> PoliteFetcher:
     """The one PoliteFetcher everybody uses, made on first use (so delays and cache are shared)."""
@@ -193,11 +183,9 @@ def _shared() -> PoliteFetcher:
             _default = PoliteFetcher()
         return _default
 
-
 def polite_fetch(url: str, cancel_event: threading.Event | None = None) -> FetchedPage:
     """The function the window calls. Same shape as fetcher.fetch, with good manners."""
     return _shared().fetch(url, cancel_event=cancel_event)
-
 
 def forget(url: str) -> None:
     """Drop the remembered copy of a page (Ctrl+R uses this)."""

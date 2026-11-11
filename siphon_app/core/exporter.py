@@ -75,16 +75,13 @@ def safe_sheet_names(names: list[str]) -> list[str]:
         cleaned.append(text)
     return _make_unique(cleaned, SHEET_NAME_MAX)
 
-
-# ---- helpers -----------------------------------------------------------------------------
-
+# helpers
 def _os_problem(error: OSError, path: Path) -> ExportError:
     """Turn a disk error into a friendly ExportError."""
     if isinstance(error, PermissionError):
         return ExportError(f"Couldn't write {path.name}. It may be open in another program "
-                           "(like Excel): close it and try again.")
+                        "(like Excel): close it and try again.")
     return ExportError(f"Couldn't write {path.name}: {error.strerror or error}.")
-
 
 def free_path(folder: Path, name: str, extension: str) -> Path:
     """folder/name.csv, or 'name (2).csv' if that exists: never overwrite someone's file."""
@@ -95,12 +92,10 @@ def free_path(folder: Path, name: str, extension: str) -> Path:
         path = folder / f"{name} ({count}){extension}"
     return path
 
-
 def _check_tables(tables: list[Table]) -> None:
     """Stop early if there is nothing to save."""
     if not tables:
         raise ExportError("There are no tables to export.")
-
 
 def _protect(cell: Cell) -> Cell:
     """
@@ -116,9 +111,7 @@ def _protect(cell: Cell) -> Cell:
         return "'" + cell
     return cell
 
-
-# ---- CSV ---------------------------------------------------------------------------------
-
+# CSV
 def export_csv(tables: list[Table], folder: str | Path, *, protect_formulas: bool = True) -> list[Path]:
     """
     One UTF-8 file per table (with a BOM so Excel shows accents and symbols properly).
@@ -145,13 +138,10 @@ def export_csv(tables: list[Table], folder: str | Path, *, protect_formulas: boo
         paths.append(path)
     return paths
 
-
-# ---- Excel -------------------------------------------------------------------------------
-
+# Excel
 def _excel_text(text: str) -> str:
     """Remove characters Excel refuses and cut to its per-cell limit."""
     return ILLEGAL_CHARACTERS_RE.sub("", text)[:XLSX_MAX_TEXT]
-
 
 def export_xlsx(tables: list[Table], path: str | Path) -> Path:
     """
@@ -165,7 +155,7 @@ def export_xlsx(tables: list[Table], path: str | Path) -> Path:
     for table in tables:
         if table.n_rows > XLSX_MAX_ROWS:
             raise ExportError(f"'{table.name}' has {table.n_rows:,} rows, more than an Excel "
-                              "sheet can hold. Export it as CSV instead.")
+                            "sheet can hold. Export it as CSV instead.")
 
     workbook = Workbook()
     workbook.remove(workbook.active)                          # drop the empty default sheet
@@ -198,9 +188,7 @@ def export_xlsx(tables: list[Table], path: str | Path) -> Path:
         raise _os_problem(error, path) from None
     return path
 
-
-# ---- JSON --------------------------------------------------------------------------------
-
+#JSON
 def export_json(tables: list[Table], path: str | Path) -> Path:
     """One JSON file: every table with its name, source and rows as {column: value} records."""
     _check_tables(tables)
@@ -220,11 +208,10 @@ def export_json(tables: list[Table], path: str | Path) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as handle:
             json.dump({"siphon_version": __version__, "tables": entries}, handle,
-                      ensure_ascii=False, indent=2)
+                    ensure_ascii=False, indent=2)
     except OSError as error:
         raise _os_problem(error, path) from None
     return path
-
 
 if __name__ == "__main__":
     # Quick terminal check:  python -m siphon_app.core.exporter tests/fixtures/prices.html out

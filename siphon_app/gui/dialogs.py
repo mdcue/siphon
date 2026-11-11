@@ -6,13 +6,12 @@ typed, or None if they cancelled.
 """
 import ttkbootstrap as ttk
 
-
 class NameDialog(ttk.Toplevel):
     def __init__(self, parent, current: str = "") -> None:
         # master=parent matters: ttkbootstrap's first positional argument is the TITLE,
         # not the parent, so the parent has to be passed by name.
         super().__init__(title="Rename column", resizable=(False, False),
-                         transient=parent.winfo_toplevel(), master=parent)
+                        transient=parent.winfo_toplevel(), master=parent)
         self.result: str | None = None      # stays None unless they press Rename
 
         frame = ttk.Frame(self, padding=16)
@@ -41,7 +40,6 @@ class NameDialog(ttk.Toplevel):
     def cancel(self) -> None:
         self.result = None
         self.destroy()
-
 
 def ask_name(parent, current: str = "") -> str | None:
     """Show the box, wait until it closes, then return the typed name (or None)."""

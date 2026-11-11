@@ -36,7 +36,6 @@ POLL_MS = 50                   # how often the window checks the worker for news
 
 READY_TEXT = "Paste a link to a page with tables, then press Fetch."
 
-
 # Runs on the worker thread. It must NEVER touch the window or any widget:
 # tkinter is not thread-safe, so the only way to talk back is the results queue.
 def run_job(results: queue.Queue, job_id: int, url: str, cancel_event: threading.Event, loader=None) -> None:
@@ -56,7 +55,6 @@ def run_job(results: queue.Queue, job_id: int, url: str, cancel_event: threading
         message = ("error", job_id,
                 f"Something went wrong while reading that page ({type(error).__name__}).")
     results.put(message)
-
 
 class SiphonApp(ttk.Window):
     """The whole window. Builds the layout, starts jobs and shows whatever comes back."""
@@ -103,8 +101,7 @@ class SiphonApp(ttk.Window):
         self.protocol("WM_DELETE_WINDOW", self.on_close)            # stop work when closing
         self.after(100, self._focus_url)
 
-    # ---- layout ----------------------------------------------------------------------
-
+    #layout
     def _build_top_bar(self) -> None:
         """Top row: address box, Fetch, Open file, Cancel and the theme switch."""
         bar = ttk.Frame(self, padding=PAD)
@@ -163,8 +160,7 @@ class SiphonApp(ttk.Window):
         self.progress.grid(row=0, column=1, padx=(0, PAD))
         self.progress.grid_remove()                # hidden until a download starts
 
-    # ---- actions ---------------------------------------------------------------------
-
+    #actions
     def _focus_url(self) -> None:
         """Put the cursor in the address box with its text selected, ready to paste over."""
         self.url_entry.focus_set()
@@ -181,8 +177,7 @@ class SiphonApp(ttk.Window):
         mode = self.style.toggle_theme()           # switches bootstrap-light <-> bootstrap-dark
         self.theme_button.configure(text="Light" if mode == "dark" else "Dark")    # offer the other one
 
-    # ---- remembering things -----------------------------------
-
+    #remembering things
     def _apply_settings(self) -> None:
         """Put the remembered choices into the controls (the window itself was set up in __init__)."""
         saved = self.settings
@@ -227,8 +222,7 @@ class SiphonApp(ttk.Window):
             forget(url)
         self._start_job(url)
 
-    # ---- background work ---------------------------
-
+    #background work
     def on_open_file(self) -> None:
         """Read a web page you saved from your browser instead of downloading one."""
         if self.busy:
@@ -348,11 +342,9 @@ class SiphonApp(ttk.Window):
             self._cancel_event.set()               # tell a running download to give up
         self.destroy()
 
-
 def main() -> None:
     """Open the window and hand control to tkinter."""
     SiphonApp().mainloop()
-
 
 if __name__ == "__main__":
     main()

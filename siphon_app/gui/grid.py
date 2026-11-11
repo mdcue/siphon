@@ -117,6 +117,21 @@ class GridView(ttk.Frame):
 
     # ---- what the person of this class uses ------------------------------------------
 
+    def destroy(self) -> None:
+        """Close the grid and give its bold font back right now.
+
+        A Font cleans itself up when Python collects it, and that can happen on any thread, such
+        as an export's worker thread, where touching Tk can hang. Doing it here keeps it on the
+        window's own thread.
+        """
+        super().destroy()
+        if self.bold.delete_font:
+            self.bold.delete_font = False               # so the later clean-up has nothing left to do
+            try:
+                self.tk.call("font", "delete", self.bold.name)
+            except tk.TclError:                         # the window is already gone: nothing to free
+                pass
+
     def set_data(self, headers: list[str], rows: list[list[str]], widths: list[int],
                  aligns: list[str], sort_column: int | None = None,
                  sort_descending: bool = False) -> None:

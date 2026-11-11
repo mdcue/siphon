@@ -29,6 +29,8 @@ from siphon_app.settings import (
 
 LIGHT_THEME = "bootstrap-light"      # ttkbootstrap 2.x ships matching -light / -dark pairs
 DARK_THEME = "bootstrap-dark"        # the app can start in dark mode
+# the window and taskbar icon; it sits next to the code so it works from source and from the exe
+ICON_PATH = Path(__file__).resolve().parent.parent / "assets" / "siphon.ico"
 PAD = 12                       # space around things, in pixels
 POLL_MS = 50                   # how often the window checks the worker for news
 
@@ -52,7 +54,7 @@ def run_job(results: queue.Queue, job_id: int, url: str, cancel_event: threading
         message = ("error", job_id, str(error))
     except Exception as error:                        # a bug: still tell the user, never hang
         message = ("error", job_id,
-                   f"Something went wrong while reading that page ({type(error).__name__}).")
+                f"Something went wrong while reading that page ({type(error).__name__}).")
     results.put(message)
 
 
@@ -65,11 +67,12 @@ class SiphonApp(ttk.Window):
         path = Path(settings_path_override) if settings_path_override else settings_path()
         saved = load_settings(path)
         super().__init__(title="siphon.", themename=DARK_THEME if saved.theme == "dark" else LIGHT_THEME,
-                         size=(saved.window_width, saved.window_height), minsize=(MIN_WIDTH, MIN_HEIGHT))
+                        size=(saved.window_width, saved.window_height), minsize=(MIN_WIDTH, MIN_HEIGHT),
+                        iconphoto=str(ICON_PATH) if ICON_PATH.is_file() else "")   # our icon, or ttkbootstrap's if the file is missing
         self.settings_file = path
         self.settings: Settings = saved
         self.geometry(f"{min(saved.window_width, self.winfo_screenwidth())}x"
-                      f"{min(saved.window_height, self.winfo_screenheight())}")     # never bigger than the screen
+                    f"{min(saved.window_height, self.winfo_screenheight())}")     # never bigger than the screen
 
         self.url_var = ttk.StringVar()
         self.status_var = ttk.StringVar(value=READY_TEXT)
@@ -120,7 +123,7 @@ class SiphonApp(ttk.Window):
 
         # open a page you saved from your browser
         self.open_button = ttk.Button(bar, text="Open file...", bootstyle="secondary-outline",
-                                      command=self.on_open_file)
+                                    command=self.on_open_file)
         self.open_button.grid(row=0, column=3, padx=(8, 0))
 
         # Cancel stays disabled until a job is running
@@ -129,7 +132,7 @@ class SiphonApp(ttk.Window):
         self.cancel_button.grid(row=0, column=4, padx=(8, 0))
 
         self.theme_button = ttk.Button(bar, text="Dark", width=6, bootstyle="secondary-outline",
-                                       command=self.toggle_theme)
+                                    command=self.toggle_theme)
         self.theme_button.grid(row=0, column=5, padx=(8, 0))
 
     def _build_content(self) -> None:
@@ -246,7 +249,7 @@ class SiphonApp(ttk.Window):
         self._set_busy(True)
         self.set_status(status or f"Downloading from {urlparse(url).hostname} ...")
         threading.Thread(target=run_job, args=(self._results, self._job_id, url, self._cancel_event),
-                         kwargs={"loader": loader}, daemon=True).start()   # daemon: it can't keep the program alive
+                        kwargs={"loader": loader}, daemon=True).start()   # daemon: it can't keep the program alive
         self._schedule_poll()
 
     def _set_busy(self, busy: bool) -> None:

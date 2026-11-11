@@ -23,21 +23,17 @@ POLL_MS = 50                  # how often we check the worker for news
 CLEAN_ON_TEXT = "Numbers like $1,234 or 12% are saved as real numbers."
 CLEAN_OFF_TEXT = "Showing and saving the text exactly as it is on the page."
 
-
-# ---- helpers that need no window ---------------------------------------------------------
-
+#helpers that need no window
 def default_folder() -> str:
     """The Downloads folder if there is one, otherwise the home folder."""
     downloads = Path.home() / "Downloads"
     return str(downloads if downloads.is_dir() else Path.home())
-
 
 def export_label(count: int) -> str:
     """Text for the Export button: 'Export', 'Export 1 table', 'Export 3 tables'."""
     if count == 0:
         return "Export"
     return f"Export {count} {'table' if count == 1 else 'tables'}"
-
 
 def open_folder(folder: str | Path) -> None:
     """Show a folder in Explorer (or Finder / the file manager on other systems)."""
@@ -47,7 +43,6 @@ def open_folder(folder: str | Path) -> None:
         subprocess.Popen(["open", str(folder)])
     else:
         subprocess.Popen(["xdg-open", str(folder)])
-
 
 # Runs on a worker thread. Like run_job in app.py it must NEVER touch a widget:
 # its only way to talk back is the queue.
@@ -60,16 +55,14 @@ def run_export(results: queue.Queue, tables: list[Table], fmt: str, folder: str)
     except Exception as error:                            # a bug: still tell the user, never hang
         results.put(("error", f"Something went wrong while saving ({type(error).__name__})."))
 
-
-# ---- the widget --------------------------------------------------------------------------
-
+#the widget
 class ExportBar(ttk.Frame):
     """The export strip. The window gives it callbacks, so it never has to know about the window."""
 
     def __init__(self, master, get_tables: Callable[[], list[Table]],
-                 notify: Callable[..., None] | None = None,
-                 on_clean_change: Callable[[bool], None] | None = None,
-                 on_saved: Callable[[], None] | None = None) -> None:
+                notify: Callable[..., None] | None = None,
+                on_clean_change: Callable[[bool], None] | None = None,
+                on_saved: Callable[[], None] | None = None) -> None:
         super().__init__(master)
         self.get_tables = get_tables                      # what to export: the ticked tables
         self.notify = notify or (lambda text, error=False: None)
@@ -106,7 +99,7 @@ class ExportBar(ttk.Frame):
         clean = ttk.Frame(self)
         clean.grid(row=2, column=1, columnspan=3, sticky="w", pady=(6, 0))
         self.clean_check = ttk.Checkbutton(clean, text="Clean numbers", variable=self.clean_var,
-                                           command=self._on_clean)
+                                        command=self._on_clean)
         self.clean_check.pack(side="left")
         self.clean_label = ttk.Label(clean, text=CLEAN_ON_TEXT, bootstyle="secondary")
         self.clean_label.pack(side="left", padx=(12, 0))
@@ -123,16 +116,15 @@ class ExportBar(ttk.Frame):
         self.export_button = ttk.Button(buttons, text="Export", bootstyle="success", command=self.on_export)
         self.export_button.pack(side="left")
         self.open_button = ttk.Button(buttons, text="Open folder", bootstyle="secondary-outline",
-                                      command=self.on_open, state="disabled")
+                                    command=self.on_open, state="disabled")
         self.open_button.pack(side="left", padx=(8, 0))
 
-    # ---- keeping the controls in step ------------------------------------------------
-
+    #keeping the controls in step
     def refresh(self) -> None:
         """Call whenever the ticked tables change: updates the Export button's text and state."""
         count = len(self.get_tables())
         self.export_button.configure(text=export_label(count),
-                                     state="normal" if count and not self.busy else "disabled")
+                                    state="normal" if count and not self.busy else "disabled")
         self.format_hint.configure(text=FORMAT_HINTS[self.format_var.get()])
 
     def set_clean_text(self, text: str | None = None) -> None:
@@ -149,12 +141,11 @@ class ExportBar(ttk.Frame):
         """Tell the window the box changed so it can swap the preview."""
         self.on_clean_change(self.clean_var.get())
 
-    # ---- actions ---------------------------------------------------------------------
-
+    #actions
     def browse(self) -> None:
         """Let the person pick the save folder."""
         chosen = filedialog.askdirectory(parent=self, initialdir=self.folder_var.get() or None,
-                                         title="Choose where to save")
+                                        title="Choose where to save")
         if chosen:                                        # empty if the person pressed Cancel
             self.folder_var.set(os.path.normpath(chosen))
 
@@ -170,7 +161,7 @@ class ExportBar(ttk.Frame):
         self.refresh()
         self.notify("Saving ...")
         threading.Thread(target=run_export, args=(self._results, tables, self.format_var.get(),
-                                                  self.folder_var.get()), daemon=True).start()   # daemon: it can't keep the program alive
+                                                self.folder_var.get()), daemon=True).start()   # daemon: it can't keep the program alive
         self._schedule_poll()
 
     def on_open(self) -> None:
@@ -182,8 +173,7 @@ class ExportBar(ttk.Frame):
         except OSError:
             self.notify(f"Couldn't open {self.last_folder}.", error=True)
 
-    # ---- hearing back from the worker ------------------------------------------------
-
+    #hearing back from the worker
     def _schedule_poll(self) -> None:
         """Check the queue again in a moment (never two timers at once)."""
         if self._poll_id is not None:

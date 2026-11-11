@@ -25,7 +25,6 @@ from siphon_app.core.polite import polite_fetch
 # exit codes: 0 worked, 1 something went wrong (bad page, nothing found, can't save), 2 bad command
 OK, FAILED, USAGE = 0, 1, 2
 
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="siphon",
@@ -46,13 +45,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"siphon {__version__}")
     return parser
 
-
 def looks_like_file(source: str) -> bool:
     """A saved page, not an address: it has no '://' and it exists on this computer (or ends in .html)."""
     if "://" in source:
         return False
     return Path(source).suffix.lower() in HTML_EXTENSIONS or Path(source).exists()
-
 
 def parse_numbers(values: list[str] | None, count: int) -> list[int]:
     """'-t 1 -t 3,4' -> [0, 2, 3] (positions). Raises ValueError with a message that is safe to show."""
@@ -71,12 +68,10 @@ def parse_numbers(values: list[str] | None, count: int) -> list[int]:
                 picked.append(number - 1)
     return picked
 
-
 def table_line(number: int, table: Table) -> str:
     """'2. Prices - 10 rows x 4 columns (looks like page layout)'"""
     line = f"{number}. {table.name} - {table.n_rows:,} rows x {table.n_cols} columns"
     return line + " (looks like page layout)" if table.is_layout else line
-
 
 def run(argv: list[str], out=None, err=None, fetch=polite_fetch) -> int:
     """Do one job and return the exit code. out/err/fetch can be swapped, which is how the tests run it."""
@@ -153,7 +148,6 @@ def run(argv: list[str], out=None, err=None, fetch=polite_fetch) -> int:
         print(path, file=out)                     # the file names go to stdout, so other programs can read them
     return OK
 
-
 def opened_by_double_click() -> bool:
     """True on Windows when this program has a console all to itself, which is what a double-click gives it.
     From cmd there are two programs sharing the console (cmd and us)."""
@@ -162,7 +156,6 @@ def opened_by_double_click() -> bool:
     import ctypes
     room = (ctypes.c_uint * 4)()
     return ctypes.windll.kernel32.GetConsoleProcessList(room, 4) <= 1
-
 
 def main() -> None:
     """Entry point used by __main__: run, then exit with the result."""

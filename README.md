@@ -116,3 +116,4 @@ Built with Python, tkinter, ttkbootstrap, requests, BeautifulSoup with lxml, ope
 ## Licence
 
 siphon is free software under the [MIT licence](LICENSE): use it, change it and share it, including commercially. The libraries it is built on are also free to use and share; their licences are listed in `THIRD_PARTY_NOTICES.txt`, which comes inside every release zip.
+The icon is original artwork, covered by the same MIT licence.

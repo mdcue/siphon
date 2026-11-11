@@ -7,10 +7,8 @@ from PIL import Image
 
 from siphon_app.gui.app import ICON_PATH
 
-
 def test_icon_file_exists():
     assert ICON_PATH.is_file()
-
 
 def test_icon_has_the_sizes_windows_asks_for():
     with Image.open(ICON_PATH) as icon:

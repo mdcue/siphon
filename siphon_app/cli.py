@@ -109,7 +109,10 @@ def run(argv: list[str], out=None, err=None, fetch=polite_fetch) -> int:
     if page.note and not args.quiet:
         say(page.note)
 
-    tables = parse_page(page)
+    try:
+        tables = parse_page(page)
+    except FetchError as error:                   # e.g. a page nested absurdly deep
+        return fail(str(error))
     if not tables:
         return fail("No tables found on that page. If it builds its tables with JavaScript, "
                     "save it from your browser and open the saved file instead.")

@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 # A cell is text straight from the page, or a number once the cleaner has converted it.
 Cell = str | int | float
 
-
 @dataclass
 class Table:
     """One scraped table: a name, column headers and rows of cells."""

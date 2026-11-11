@@ -483,3 +483,17 @@ def test_the_heading_colour_follows_the_theme(app, make_grid):
     import ttkbootstrap as ttk
     colors = ttk.Style().colors
     assert grid.header.cget("bg") == grid.c_head == blend(colors.inputbg, colors.inputfg, 0.12)
+
+
+# closing a grid frees its bold font on the spot, instead of leaving it for the garbage collector
+# (which may run on a worker thread, where touching Tk can hang)
+def test_destroying_a_grid_deletes_its_bold_font_right_away(app):
+    import ttkbootstrap as ttk
+    top = ttk.Toplevel(master=app)
+    top.withdraw()
+    grid = GridView(top)
+    name = grid.bold.name
+    assert name in app.tk.call("font", "names")
+    top.destroy()
+    assert name not in app.tk.call("font", "names")
+    assert grid.bold.delete_font is False

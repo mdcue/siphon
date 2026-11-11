@@ -25,13 +25,11 @@ WHEEL_COLUMNS = 1       # columns moved by one notch of Shift + wheel
 FALLBACK_SIZE = (800, 400)      # how much to draw when the grid is not on screen yet (tests)
 ARROW_UP, ARROW_DOWN = " ^", " v"    # sort arrows: plain characters, every font has them
 
-
 def blend(color_a: str, color_b: str, share: float) -> str:
     """A colour `share` of the way from a to b (both '#rrggbb'). Used for the row stripes."""
     a = [int(color_a[i:i + 2], 16) for i in (1, 3, 5)]
     b = [int(color_b[i:i + 2], 16) for i in (1, 3, 5)]
     return "#" + "".join(f"{round(x + (y - x) * share):02x}" for x, y in zip(a, b))
-
 
 def shorten(text: str, room: int, measure: Callable[[str], int]) -> str:
     """Cut text so it fits in `room` pixels, ending with an ellipsis if it had to be cut."""
@@ -46,12 +44,11 @@ def shorten(text: str, room: int, measure: Callable[[str], int]) -> str:
             high = middle - 1
     return text[:low] + "…"
 
-
 class GridView(ttk.Frame):
     def __init__(self, master,
-                 on_sort: Callable[[int], None] | None = None,
-                 on_menu: Callable[[int, int, int], None] | None = None,
-                 on_resize: Callable[[int, int], None] | None = None) -> None:
+                on_sort: Callable[[int], None] | None = None,
+                on_menu: Callable[[int, int, int], None] | None = None,
+                on_resize: Callable[[int, int], None] | None = None) -> None:
         super().__init__(master)
         self.on_sort = on_sort or (lambda column: None)             # heading clicked
         self.on_menu = on_menu or (lambda column, x, y: None)       # heading right-clicked (column, screen x, y)
@@ -88,7 +85,7 @@ class GridView(ttk.Frame):
         self.header = tk.Canvas(self, height=self.header_height, highlightthickness=0, bd=0)
         self.header.grid(row=0, column=0, sticky="ew")
         self.body = tk.Canvas(self, highlightthickness=0, bd=0, takefocus=1,
-                              xscrollincrement=1, yscrollincrement=self.row_height)
+                            xscrollincrement=1, yscrollincrement=self.row_height)
         self.body.grid(row=1, column=0, sticky="nsew")
         self.vbar = ttk.Scrollbar(self, orient="vertical", command=self.body.yview)
         self.vbar.grid(row=1, column=1, sticky="ns")
@@ -115,8 +112,7 @@ class GridView(ttk.Frame):
         self.header.bind("<ButtonRelease-1>", self._on_header_release)
         self.header.bind("<Button-3>", self._on_header_right_click)
 
-    # ---- what the person of this class uses ------------------------------------------
-
+    #what the person of this class uses
     def destroy(self) -> None:
         """Close the grid and give its bold font back right now.
 
@@ -133,8 +129,8 @@ class GridView(ttk.Frame):
                 pass
 
     def set_data(self, headers: list[str], rows: list[list[str]], widths: list[int],
-                 aligns: list[str], sort_column: int | None = None,
-                 sort_descending: bool = False) -> None:
+                aligns: list[str], sort_column: int | None = None,
+                sort_descending: bool = False) -> None:
         """Show this data. Keeps the scroll position, so searching or sorting doesn't jump around."""
         self.headers, self.rows = list(headers), rows
         self.widths, self.aligns = list(widths), list(aligns)
@@ -155,8 +151,7 @@ class GridView(ttk.Frame):
         self.body.xview_moveto(0)
         self.body.yview_moveto(0)
 
-    # ---- sizes and colours -----------------------------------------------------------
-
+    #sizes and colours
     def _load_colors(self) -> None:
         """Pick the colours from the current ttkbootstrap theme."""
         colors = ttk.Style().colors
@@ -187,8 +182,7 @@ class GridView(ttk.Frame):
         self.header.xview_moveto(self.body.xview()[0])
         self._invalidate()
 
-    # ---- drawing ---------------------------------------------------------------------
-
+    #drawing
     def _heading_text(self, column: int) -> str:
         arrow = ""
         if column == self.sort_column:
@@ -203,10 +197,10 @@ class GridView(ttk.Frame):
             left, right = self._edges[column], self._edges[column + 1]
             text = shorten(self._heading_text(column), self.widths[column] - 2 * PAD, self.bold.measure)
             h.create_text(left + PAD, self.header_height / 2, text=text, anchor="w",
-                          fill=self.c_head_text, font=self.bold)
+                        fill=self.c_head_text, font=self.bold)
             h.create_line(right - 1, 4, right - 1, self.header_height - 4, fill=self.c_line)
         h.create_line(0, self.header_height - 1, max(self._edges[-1], 1), self.header_height - 1,
-                      fill=self.c_line)
+                    fill=self.c_line)
 
     def _schedule_redraw(self) -> None:
         """Redraw once things go quiet. Dragging a scroll bar fires many events; one redraw is enough."""
@@ -294,8 +288,7 @@ class GridView(ttk.Frame):
             x = self._edges[column + 1] - 1
             b.create_line(x, first_row * rh, x, last_row * rh, fill=self.c_line)
 
-    # ---- scrolling -------------------------------------------------------------------
-
+    #scrolling
     def _xview(self, *args) -> None:
         self.body.xview(*args)
 
@@ -350,8 +343,7 @@ class GridView(ttk.Frame):
             self.body.yview_scroll(direction, "pages")
         return "break"
 
-    # ---- clicking the body -----------------------------------------------------------
-
+    #clicking the body
     def _on_body_click(self, event) -> None:
         """Highlight the clicked row."""
         row = int(self.body.canvasy(event.y) // self.row_height)
@@ -359,8 +351,7 @@ class GridView(ttk.Frame):
         self.body.focus_set()
         self._invalidate()
 
-    # ---- the headings: sorting, the menu and resizing --------------------------------
-
+    #the headings: sorting, the menu and resizing
     def column_at(self, x: float) -> int | None:
         """Which column is at this canvas x position (None if it is past the last one)."""
         if not self.widths or x < 0 or x >= self._edges[-1]:

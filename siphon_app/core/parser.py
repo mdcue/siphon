@@ -42,15 +42,13 @@ DROP_TAGS = ["script", "style", "noscript", "template"]    # thrown away along w
 HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"]
 # Pad these with spaces so text around them doesn't get glued together ("Hello<p>World" -> "Hello World").
 BLOCK_TAGS = ["p", "div", "li", "ul", "ol", "dl", "dt", "dd", "blockquote", "pre",
-              "section", "article", "address"] + HEADING_TAGS
+            "section", "article", "address"] + HEADING_TAGS
 
 _NUMERIC = re.compile(r"[\s$\u20ac\u00a3\u00a5\u20b9+\-\u2212(]*\d[\d,.\s]*[%)KMBTkmbt]*")     # "12", "$1,234.50", "3.4%", "(5)", plus euro/pound/yen/rupee signs and the Unicode minus
 _FOOTNOTE = re.compile(r"(?:\s*\[(?:\d{1,3}|[a-z]|note \d{1,3})\])+$")  # "Population[1]", "Rank [a]"
 _EDIT_MARK = re.compile(r"\s*\[(?:edit|\d{1,3})\]$", re.IGNORECASE)    # Wikipedia headings: "History[edit]"
 
-
-# ---- small containers used while reading ------------------------------------
-
+#small containers used while reading
 @dataclass
 class _Cell:                  # one <td>/<th> as written in the HTML
     text: str
@@ -58,12 +56,10 @@ class _Cell:                  # one <td>/<th> as written in the HTML
     colspan: int
     rowspan: int              # 0 means "all the way down", same as HTML
 
-
 @dataclass
 class _Row:                   # one <tr>
     cells: list[_Cell]
     in_thead: bool
-
 
 @dataclass
 class _Slot:                  # one square of the finished grid
@@ -71,9 +67,7 @@ class _Slot:                  # one square of the finished grid
     is_th: bool
     copied: bool = False      # True when this square is just a copy from a merged cell
 
-
-# ---- public functions ------------------------------------------------------------
-
+# public functions
 def parse_tables(markup: bytes | str, source_url: str = "", encoding: str | None = None) -> list[Table]:
     """Find every <table> in the page and return the ones that have something in them.
 
@@ -99,7 +93,6 @@ def parse_tables(markup: bytes | str, source_url: str = "", encoding: str | None
         table.name = name
     return tables
 
-
 def parse_page(page: "FetchedPage") -> list[Table]:
     """Shortcut: parse what fetch() gave back, using its URL and charset."""
     return parse_tables(
@@ -107,7 +100,6 @@ def parse_page(page: "FetchedPage") -> list[Table]:
         source_url=page.url,
         encoding=charset_from_content_type(page.content_type),
     )
-
 
 def charset_from_content_type(content_type: str) -> str | None:
     """'text/html; charset=utf-8' -> 'utf-8'. None if missing or not a charset Python knows."""
@@ -120,9 +112,7 @@ def charset_from_content_type(content_type: str) -> str | None:
         return None
     return match.group(1)
 
-
-# ---- reading the HTML -------------------------------------------------------
-
+# reading the HTML
 def _check_nesting(markup: bytes | str) -> None:
     """Refuse a page that stacks tags absurdly deep, before the slow part starts.
 
@@ -136,8 +126,7 @@ def _check_nesting(markup: bytes | str) -> None:
         depth = max(0, depth + (-1 if match.group(1) else 1))
         if depth > MAX_NESTING:
             raise FetchError(f"That page nests its elements more than {MAX_NESTING:,} levels deep, "
-                             "which no normal page does, so siphon didn't read it.")
-
+                            "which no normal page does, so siphon didn't read it.")
 
 def _prepare(soup: BeautifulSoup) -> None:
     """Throw away the tags whose text is code or notices, not table content (scripts, styles...).
@@ -150,7 +139,6 @@ def _prepare(soup: BeautifulSoup) -> None:
         if not _removed(tag):                   # skip ones already gone inside a removed parent
             tag.decompose()
 
-
 def _removed(tag) -> bool:
     """True if the tag was thrown away along with a parent we decomposed.
 
@@ -159,7 +147,6 @@ def _removed(tag) -> bool:
     the levels below). Decomposing marks a tag in its own dictionary, so we can just look there.
     """
     return "_decomposed" in vars(tag)
-
 
 def _cell_text(tag) -> str:
     """The visible text of a tag, with whitespace squashed down to single spaces.
@@ -191,12 +178,10 @@ def _cell_text(tag) -> str:
     text = "".join(pieces).replace("\u200b", "")       # zero-width spaces are invisible junk
     return re.sub(r"\s+", " ", text).strip()           # \s also catches non-breaking spaces
 
-
 def _span(cell, attribute: str) -> int:
     """Read a colspan/rowspan number, or 1 if it's missing or nonsense."""
     match = re.match(r"\s*(\d+)", str(cell.get(attribute, "")))   # browsers accept "2px" as 2
     return int(match.group(1)) if match else 1
-
 
 def _locate(tr) -> tuple:
     """Walk up from a <tr> to find (its table, the thead/tbody/tfoot around it or None).
@@ -211,7 +196,6 @@ def _locate(tr) -> tuple:
         if section is None and parent.name in ("thead", "tbody", "tfoot"):
             section = parent.name
     return None, section
-
 
 def _read_rows(table_tag) -> list[_Row]:
     """Read this table's own rows into _Row objects (cells not yet spread out)."""
@@ -233,16 +217,13 @@ def _read_rows(table_tag) -> list[_Row]:
         rows.append(_Row(cells=cells, in_thead=section == "thead"))
     return rows
 
-
-# ---- merged cells -> rectangular grid ---------------------------------------
-
+#merged cells -> rectangular grid
 def _natural_width(rows: list[_Row]) -> int:
     """How wide the table really is, ignoring 'whole row' colspans like colspan="1000"."""
     width = 1
     for row in rows:
         width = max(width, sum(c.colspan for c in row.cells if c.colspan <= BIG_SPAN))
     return width
-
 
 def _use_carry(carry: dict, column: int) -> _Slot:
     """Use one row of a cell that reaches down from an earlier row (rowspan)."""
@@ -252,7 +233,6 @@ def _use_carry(carry: dict, column: int) -> _Slot:
     else:
         carry[column][0] = remaining - 1
     return _Slot(slot.text, slot.is_th, copied=True)
-
 
 def _expand(rows: list[_Row]) -> tuple[list[list[_Slot]], bool]:
     """Place every cell on a grid, copying a merged cell into every square it covers.
@@ -305,9 +285,7 @@ def _expand(rows: list[_Row]) -> tuple[list[list[_Slot]], bool]:
         grid.append(out)
     return grid, truncated
 
-
-# ---- headers ----------------------------------------------------------------
-
+#headers
 def _looks_like_header(row: list[_Slot]) -> bool:
     """For tables with no <th>/<thead>: does the first row look like column names?"""
     texts = [slot.text for slot in row]
@@ -315,7 +293,6 @@ def _looks_like_header(row: list[_Slot]) -> bool:
     if len(filled) < max(1, len(texts) / 2):
         return False                                   # mostly empty cells
     return not any(_NUMERIC.fullmatch(t) for t in filled)   # numbers mean data, not names
-
 
 def _count_header_rows(in_thead: list[bool], grid: list[list[_Slot]]) -> int:
     """How many rows at the top are headers: <thead> first, then all-<th> rows, then a guess."""
@@ -333,7 +310,6 @@ def _count_header_rows(in_thead: list[bool], grid: list[list[_Slot]]) -> int:
         return count
     return 1 if _looks_like_header(grid[0]) else 0     # 3) guess from the first row's content
 
-
 def _header_names(header_rows: list[list[_Slot]], width: int) -> list[str]:
     """One name per column; stacked header rows are joined, e.g. 'Population' + '2020'."""
     names = []
@@ -345,7 +321,6 @@ def _header_names(header_rows: list[list[_Slot]], width: int) -> list[str]:
                 parts.append(text)
         names.append(" ".join(parts))
     return names
-
 
 def _unique_names(names: list[str]) -> list[str]:
     """Make names unique: 'Name', 'Name' -> 'Name', 'Name (2)'."""
@@ -361,16 +336,13 @@ def _unique_names(names: list[str]) -> list[str]:
         result.append(candidate)
     return result
 
-
-# ---- naming -----------------------------------------------------------------
-
+#naming
 def _clean_name(text: str) -> str:
     """Squash spaces, drop Wikipedia's [edit] marks and cut very long names short."""
     text = _EDIT_MARK.sub("", re.sub(r"\s+", " ", text).strip())
     if len(text) > MAX_NAME_LENGTH:
         text = text[: MAX_NAME_LENGTH - 3].rstrip() + "..."
     return text
-
 
 def _guess_name(tag) -> str:
     """Name a table: its caption, else the nearest heading above, else an attribute, else ''."""
@@ -388,13 +360,10 @@ def _guess_name(tag) -> str:
         return _clean_name(re.sub(r"[_\-]+", " ", identifier))
     return ""
 
-
-# ---- one table --------------------------------------------------------------
-
+#one table
 def _plural(count: int, noun: str) -> str:
     """'1 row' or '3 rows'."""
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
-
 
 def _parse_table(tag, source_url: str) -> Table | None:
     """Turn one <table> into a Table, or None if there's nothing worth keeping."""
@@ -463,7 +432,6 @@ def _parse_table(tag, source_url: str) -> Table | None:
         warnings=warnings,
         is_layout=is_layout,
     )
-
 
 if __name__ == "__main__":
     # Quick check from the terminal, no window needed:

@@ -23,7 +23,6 @@ MAX_SIZE = 10_000                # anything bigger in the file is clearly wrong
 THEMES = ("light", "dark")
 FILE_VERSION = 1                 # saved in the file so a later version can upgrade old files
 
-
 @dataclass
 class Settings:
     """Everything the app remembers. Each field has a safe default."""
@@ -35,11 +34,9 @@ class Settings:
     window_height: int = 640
     recent_urls: list[str] = field(default_factory=list)
 
-
 def settings_path() -> Path:
     """Where the file lives: C:\\Users\\<you>\\AppData\\Local\\Siphon\\settings.json on Windows."""
     return Path(user_config_dir("Siphon", appauthor=False)) / "settings.json"
-
 
 # ---- checking one value at a time --------------------------------------------------------
 # Each one takes whatever was in the file and hands back something safe to use.
@@ -48,16 +45,13 @@ def _text(value, default: str) -> str:
     """Text stays text; anything else becomes the default."""
     return value if isinstance(value, str) else default
 
-
 def _choice(value, allowed, default: str) -> str:
     """Only accept a value from the allowed list."""
     return value if isinstance(value, str) and value in allowed else default
 
-
 def _flag(value, default: bool) -> bool:
     """A true/false setting. Must really be a bool."""
     return value if isinstance(value, bool) else default
-
 
 def _size(value, minimum: int, default: int) -> int:
     """A window size: a whole number between the minimum and MAX_SIZE."""
@@ -65,7 +59,6 @@ def _size(value, minimum: int, default: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= MAX_SIZE:
         return default
     return value
-
 
 def _urls(value) -> list[str]:
     """Keep only non-empty text, drop repeats (keeping the first), and cap the length."""
@@ -77,9 +70,7 @@ def _urls(value) -> list[str]:
             result.append(item)
     return result[:MAX_RECENT]
 
-
-# ---- loading and saving ------------------------------------------------------------------
-
+#loading and saving
 def load_settings(path: str | Path | None = None) -> Settings:
     """Read the file. Anything missing or wrong falls back to its default."""
     defaults = Settings()
@@ -99,7 +90,6 @@ def load_settings(path: str | Path | None = None) -> Settings:
         window_height=_size(data.get("window_height"), MIN_HEIGHT, defaults.window_height),
         recent_urls=_urls(data.get("recent_urls")),
     )
-
 
 def save_settings(settings: Settings, path: str | Path | None = None) -> bool:
     """
@@ -124,7 +114,6 @@ def save_settings(settings: Settings, path: str | Path | None = None) -> bool:
         except OSError:
             pass
         return False
-
 
 def remember_url(settings: Settings, url: str) -> None:
     """Put an address at the top of the recent list (moving it up if it was already there)."""

@@ -12,7 +12,6 @@ from siphon_app.core.fetcher import MAX_BYTES, FetchedPage, FetchError
 
 HTML_EXTENSIONS = (".html", ".htm", ".xhtml")
 
-
 def read_html_file(path: str | Path) -> FetchedPage:
     """Return the file as a FetchedPage, or raise FetchError with a message safe to show."""
     path = Path(path)

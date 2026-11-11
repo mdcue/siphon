@@ -29,14 +29,11 @@ CHUNK_SIZE = 64 * 1024         # take at most 64 KB per read
 FALLBACK_CHUNK = 8 * 1024      # only used with a very old urllib3 (see _chunks)
 HTML_TYPES = ("", "text/html", "application/xhtml+xml")  # "" = server didn't say
 
-
 class FetchError(Exception):
     """A download problem. str(error) is always safe to show to the user."""
 
-
 class FetchCancelled(FetchError):
     """The user pressed Cancel. Not really an error, so the GUI can tell it apart."""
-
 
 @dataclass
 class FetchedPage:
@@ -44,7 +41,6 @@ class FetchedPage:
     content: bytes      # raw bytes; BeautifulSoup works out the encoding itself
     content_type: str   # e.g. "text/html; charset=utf-8" (may be empty)
     note: str = ""      # something worth telling the user, e.g. "Used the copy from 40 seconds ago."
-
 
 def normalize_url(raw: str) -> str:
     """Tidy what the user typed into a usable http(s) address, or raise FetchError."""
@@ -70,7 +66,6 @@ def normalize_url(raw: str) -> str:
     if not host or re.search(r"\s", parsed.netloc):
         raise FetchError("That doesn't look like a web address.")
     return text
-
 
 def make_session(user_agent: str | None = None) -> requests.Session:
     """
@@ -100,7 +95,6 @@ def make_session(user_agent: str | None = None) -> requests.Session:
     session.mount("https://", adapter)
     return session
 
-
 def fetch(
     url: str,
     *,
@@ -124,14 +118,11 @@ def fetch(
         if own_session:
             session.close()
 
-
-# ---- internals --------------------------------------------------------------
-
+#internals
 def _check_cancel(cancel_event: threading.Event | None) -> None:
     """Stop right now if the user pressed Cancel."""
     if cancel_event is not None and cancel_event.is_set():
         raise FetchCancelled("Cancelled.")
-
 
 def _too_big() -> FetchError:
     """The error for a page over MAX_BYTES (used in two places, so it lives here)."""
@@ -139,7 +130,6 @@ def _too_big() -> FetchError:
         f"That page is bigger than {MAX_BYTES // (1024 * 1024)} MB, "
         "which is more than siphon will download."
     )
-
 
 def _chunks(response):
     """Yield the page body in pieces, handing over whatever has arrived so far.
@@ -169,7 +159,6 @@ def _chunks(response):
     except Urllib3SSLError as error:
         raise requests.exceptions.SSLError(error) from None
 
-
 def _status_message(code: int, host: str) -> str:
     """Turn an HTTP error code into a sentence a non-programmer can act on."""
     known = {
@@ -184,7 +173,6 @@ def _status_message(code: int, host: str) -> str:
     if code >= 500:
         return f"{host} had a server problem ({code}). Try again later."
     return f"The site answered with error {code}."
-
 
 def _download(session, url, host, timeout, cancel_event) -> FetchedPage:
     """
@@ -248,7 +236,6 @@ def _download(session, url, host, timeout, cancel_event) -> FetchedPage:
         raise FetchError(f"Couldn't connect to {host}. Check the address and your internet connection.") from None
     except requests.exceptions.RequestException as error:
         raise FetchError(f"Something went wrong while downloading the page: {error}") from None
-
 
 if __name__ == "__main__":
     # Quick manual check from the terminal, no GUI needed:

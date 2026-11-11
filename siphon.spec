@@ -11,6 +11,9 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 # ttkbootstrap keeps its themes as data files, lxml and Pillow load some modules by name,
 # which PyInstaller can't spot on its own
 datas = collect_data_files("ttkbootstrap")
+# our icon: shipped as a data file (the window loads it) and stamped on both exes (what Explorer shows)
+ICON = "siphon_app/assets/siphon.ico"
+datas += [(ICON, "siphon_app/assets")]
 hidden = collect_submodules("ttkbootstrap") + ["lxml.etree", "lxml._elementpath", "PIL._tkinter_finder"]
 
 # things the app never uses, so they stay out of the build (don't add lxml here)
@@ -27,9 +30,9 @@ cli = analyse("launch_cli.py")
 MERGE((gui, "launch_gui", "siphon"), (cli, "launch_cli", "siphon-cli"))   # share files instead of copying them twice
 
 gui_exe = EXE(PYZ(gui.pure), gui.scripts, [], exclude_binaries=True, name="siphon",
-              console=False, upx=False)
+              console=False, upx=False, icon=ICON)
 cli_exe = EXE(PYZ(cli.pure), cli.scripts, [], exclude_binaries=True, name="siphon-cli",
-              console=True, upx=False)
+              console=True, upx=False, icon=ICON)
 
 COLLECT(gui_exe, gui.binaries, gui.datas,
         cli_exe, cli.binaries, cli.datas,

@@ -21,11 +21,9 @@ FORMAT_HINTS = {
     "json": "One .json file holding every table.",
 }
 
-
 def clean_all(tables: list[Table]) -> list[tuple[Table, CleanReport]]:
     """Clean every table. Slow on big tables (about 1.5 s for 30,000 rows), so call it from the worker thread."""
     return [clean_table(table) for table in tables]
-
 
 def summarize(reports: list[CleanReport]) -> str:
     """One sentence about what cleaning did to all the tables together."""
@@ -39,14 +37,12 @@ def summarize(reports: list[CleanReport]) -> str:
         text += f" {kept:,} {'cell' if kept == 1 else 'cells'} didn't look like numbers and stayed as text."
     return text
 
-
 def base_name(tables: list[Table]) -> str:
     """The file name (no extension) for a one-file export: the table's name, or the site's name."""
     if len(tables) == 1:
         return safe_filename(tables[0].name)
     host = urlparse(tables[0].source_url).hostname or ""
     return safe_filename(f"tables from {host}") if host else "tables"
-
 
 def export_tables(tables: list[Table], fmt: str, folder: str) -> list[Path]:
     """Save the tables in the folder. Returns the files written. Never overwrites an existing file."""
@@ -63,7 +59,6 @@ def export_tables(tables: list[Table], fmt: str, folder: str) -> list[Path]:
     path = free_path(target, base_name(tables), extension)
     writer = export_xlsx if fmt == "xlsx" else export_json
     return [writer(tables, path)]
-
 
 def describe(paths: list[Path]) -> str:
     """'Saved prices.csv to C:\\Users\\me\\Downloads.' for the status bar."""

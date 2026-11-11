@@ -69,6 +69,15 @@ Siphon tries to be a polite visitor:
 
 Please respect each site's terms of use.
 
+## Security
+
+- Only `http` and `https` addresses are accepted, downloads are size- and time-limited, and website certificates are always checked.
+- Scraped text can't run as a formula when you open a saved CSV or Excel file.
+- Pages nested absurdly deep are refused, so a hostile page can't freeze the app.
+- Nothing is sent anywhere except the page requests you start.
+
+The Windows programs are not code-signed, so Windows may warn on first run. Each release lists a SHA-256 checksum for its zip. To report a security problem, see [SECURITY.md](SECURITY.md).
+
 ## Limits
 
 - It reads tables that are in the page's HTML. A page that builds its tables with JavaScript, or needs a login, won't show them. Open the page in your browser, save it (File > Save As), and use **Open file** (`Ctrl+O`) in siphon instead.
@@ -106,4 +115,4 @@ Built with Python, tkinter, ttkbootstrap, requests, BeautifulSoup with lxml, ope
 
 ## Licence
 
-(Add your licence here.)
+siphon is free software under the [MIT licence](LICENSE): use it, change it and share it, including commercially. The libraries it is built on are also free to use and share; their licences are listed in `THIRD_PARTY_NOTICES.txt`, which comes inside every release zip.

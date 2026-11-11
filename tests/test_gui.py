@@ -11,12 +11,9 @@ from siphon_app.core.models import Table
 from siphon_app.gui import app as app_module
 from siphon_app.gui.app import LIGHT_THEME, READY_TEXT, SiphonApp
 
-
-# -- helpers: fake downloads, so no test ever touches the internet
-
+# helpers: fake downloads, so no test ever touches the internet
 # a canned download result, so no test touches the internet
 PAGE = FetchedPage(url="https://example.com/data", content=b"<html></html>", content_type="text/html")
-
 
 def wait_until_idle(app, timeout=5.0):
     """Let the window process events until the background job has been handled."""
@@ -27,7 +24,6 @@ def wait_until_idle(app, timeout=5.0):
     app.update()
     assert not app.busy, "the window never finished the job"
 
-
 def run_fetch(app, monkeypatch, url="example.com/data", *, fetch=None, parse=None):
     """Put a url in the box, swap in fake fetch/parse functions, and press Fetch."""
     monkeypatch.setattr(app_module, "fetch", fetch or (lambda u, cancel_event=None: PAGE))
@@ -35,11 +31,8 @@ def run_fetch(app, monkeypatch, url="example.com/data", *, fetch=None, parse=Non
     app.url_var.set(url)
     app.on_fetch()
 
-
-# -- the window itself
-
+# the window itself
 # a fresh window says Ready, uses the light theme and has nothing running
-
 def test_window_starts_ready_with_the_light_theme(app):
     assert app.title() == "siphon."
     assert app.status_var.get() == READY_TEXT
@@ -48,9 +41,7 @@ def test_window_starts_ready_with_the_light_theme(app):
     assert not app.status_is_error
     assert not app.busy and str(app.cancel_button.cget("state")) == "disabled"
 
-
 # a bad address gets a red message and never starts a download
-
 def test_a_bad_address_shows_the_reason_in_the_status_bar(app):
     app.url_var.set("mailto:someone@example.com")
     app.on_fetch()
@@ -58,9 +49,7 @@ def test_a_bad_address_shows_the_reason_in_the_status_bar(app):
     assert app.status_is_error
     assert not app.busy  # a bad address never starts a download
 
-
 # an empty address box is refused the same way
-
 def test_an_empty_address_is_rejected(app):
     app.url_var.set("   ")
     app.on_fetch()
@@ -68,9 +57,7 @@ def test_an_empty_address_is_rejected(app):
     assert app.status_is_error
     assert not app.busy
 
-
 # the theme button flips to dark and back again
-
 def test_theme_button_switches_to_dark_and_back(app):
     app.toggle_theme()
     assert app.style.theme_mode == "dark"
@@ -79,17 +66,13 @@ def test_theme_button_switches_to_dark_and_back(app):
     assert app.style.theme_mode == "light"
     assert app.theme_button.cget("text") == "Dark"
 
-
 # pressing Enter in the address box is wired up to Fetch
-
 def test_enter_in_the_url_box_fetches(app):
     assert app.url_entry.bind("<Return>")                         # a handler is attached
 
 
-# -- downloading in the background
-
+# downloading in the background
 # a typed address gets tidied up, fetched (fake download) and shown
-
 def test_a_good_address_is_tidied_and_downloaded(app, monkeypatch):
     seen = []
     def fake_fetch(url, cancel_event=None):
@@ -106,21 +89,17 @@ def test_a_good_address_is_tidied_and_downloaded(app, monkeypatch):
     assert app.table_view.name_label.cget("text") == "Prices"  # shown in the preview now
     assert "2 rows" in app.table_view.size_label.cget("text")
 
-
 # the status counts the tables, and layout tables stay hidden by default
-
 def test_several_tables_and_layout_tables_are_described(app, monkeypatch):
     tables = [Table("Sales", ["A", "B"], [["1", "2"]]),
-              Table("Menu", ["A"], [["x"]], is_layout=True)]
+            Table("Menu", ["A"], [["x"]], is_layout=True)]
     run_fetch(app, monkeypatch, parse=lambda page: tables)
     wait_until_idle(app)
     assert app.status_var.get() == "Found 2 tables (1 looks like page layout)."
     listed = [app.table_view.table_list.set(i, "name") for i in app.table_view.table_list.get_children()]
     assert listed == ["Sales"]                                       # the layout table is hidden by default
 
-
 # while a slow fake download runs, the buttons lock but the window keeps working (the gate holds it open)
-
 def test_the_window_stays_responsive_and_locks_the_buttons_while_downloading(app, monkeypatch):
     started, gate = threading.Event(), threading.Event()
     def slow_fetch(url, cancel_event=None):
@@ -141,9 +120,7 @@ def test_the_window_stays_responsive_and_locks_the_buttons_while_downloading(app
     assert str(app.cancel_button.cget("state")) == "disabled"
     assert app.progress.winfo_manager() == ""            # and is hidden again
 
-
 # pressing Fetch again while busy is ignored
-
 def test_pressing_fetch_again_while_busy_does_not_start_a_second_download(app, monkeypatch):
     calls, gate = [], threading.Event()
     def slow_fetch(url, cancel_event=None):
@@ -157,9 +134,7 @@ def test_pressing_fetch_again_while_busy_does_not_start_a_second_download(app, m
     wait_until_idle(app)
     assert len(calls) == 1
 
-
 # Cancel frees the window straight away, and the worker's late answer is thrown away
-
 def test_cancel_frees_the_window_at_once_and_a_late_answer_is_ignored(app, monkeypatch):
     stop_seen = threading.Event()
     def stubborn_fetch(url, cancel_event=None):
@@ -179,17 +154,13 @@ def test_cancel_frees_the_window_at_once_and_a_late_answer_is_ignored(app, monke
     assert app.status_var.get() == "Cancelled."          # the stale answer did not overwrite it
     assert app.tables == tables_before
 
-
 # Cancel with nothing running changes nothing
-
 def test_cancel_when_nothing_is_running_does_nothing(app):
     before = app.status_var.get()
     app.on_cancel()
     assert app.status_var.get() == before
 
-
 # if the fetcher reports its own cancel, it is not shown as an error
-
 def test_a_download_can_be_cancelled_by_the_fetcher_itself(app, monkeypatch):
     def cancelled_fetch(url, cancel_event=None):
         raise FetchCancelled("Cancelled.")
@@ -198,9 +169,7 @@ def test_a_download_can_be_cancelled_by_the_fetcher_itself(app, monkeypatch):
     assert app.status_var.get() == "Cancelled."
     assert not app.status_is_error
 
-
 # a failed download shows its message in red
-
 def test_a_failed_download_shows_the_message_in_red(app, monkeypatch):
     def failing_fetch(url, cancel_event=None):
         raise FetchError("Page not found (404). Check the address.")
@@ -209,9 +178,7 @@ def test_a_failed_download_shows_the_message_in_red(app, monkeypatch):
     assert app.status_var.get() == "Page not found (404). Check the address."
     assert app.status_is_error
 
-
 # a crash in the parser shows up in the status bar and the window does not hang
-
 def test_a_crash_in_the_parser_is_reported_not_swallowed_and_never_hangs(app, monkeypatch):
     def broken_parse(page):
         raise RuntimeError("boom")
@@ -220,9 +187,7 @@ def test_a_crash_in_the_parser_is_reported_not_swallowed_and_never_hangs(app, mo
     assert "Something went wrong" in app.status_var.get() and "RuntimeError" in app.status_var.get()
     assert app.status_is_error
 
-
 # a page with no tables says so and empties the old list
-
 def test_a_page_without_tables_says_so_and_clears_the_old_list(app, monkeypatch):
     run_fetch(app, monkeypatch, parse=lambda page: [Table("Old", ["A"], [["1"]])])
     wait_until_idle(app)
@@ -234,9 +199,7 @@ def test_a_page_without_tables_says_so_and_clears_the_old_list(app, monkeypatch)
     assert app.table_view.checked_tables() == []
     assert app.table_view.placeholder.cget("text") == "No tables found on that page."
 
-
 # an error does not break the next download
-
 def test_a_new_download_works_after_an_error(app, monkeypatch):
     run_fetch(app, monkeypatch, fetch=lambda u, cancel_event=None: (_ for _ in ()).throw(FetchError("nope")))
     wait_until_idle(app)
@@ -245,9 +208,7 @@ def test_a_new_download_works_after_an_error(app, monkeypatch):
     assert app.status_var.get() == "Found 1 table."
     assert not app.status_is_error
 
-
 # a cancelled job's late answer cannot leak into the next download
-
 def test_an_answer_from_a_cancelled_job_cannot_leak_into_the_next_one(app, monkeypatch):
     # the cancelled worker still answers later; that answer must not show, or end the NEXT download early
     release_old, release_new = threading.Event(), threading.Event()
@@ -275,9 +236,7 @@ def test_an_answer_from_a_cancelled_job_cannot_leak_into_the_next_one(app, monke
     assert [t.name for t in app.tables] == ["Fresh"]
     assert app.table_view.name_label.cget("text") == "Fresh"
 
-
 # run_job sends 'cancelled' if the stop signal is already set when the page arrives
-
 def test_run_job_reports_cancelled_if_the_stop_signal_came_while_the_page_arrived(monkeypatch):
     # the worker function can be tested with no window at all
     import queue
@@ -288,9 +247,7 @@ def test_run_job_reports_cancelled_if_the_stop_signal_came_while_the_page_arrive
     app_module.run_job(results, 7, "https://example.com", event)
     assert results.get_nowait() == ("cancelled", 7)
 
-
 # Cancel really reaches the worker, through its cancel event
-
 def test_cancel_tells_the_worker_to_stop(app, monkeypatch):
     # the fake fetch records the cancel event so we can check it arrives
     seen = {}
@@ -306,29 +263,23 @@ def test_cancel_tells_the_worker_to_stop(app, monkeypatch):
     app.on_cancel()
     assert seen["event"].is_set()
 
-
-# -- cleaning and exporting through the window
-
+# cleaning and exporting through the window
 import csv
 
 from siphon_app.gui.export_bar import CLEAN_OFF_TEXT
 
 
 # one table with money text, for the cleaning tests
-
 def prices():
     return [Table("Prices", ["Name", "Price"], [["Alpha", "$1,234"], ["Beta", "$5"]],
-                  source_url="https://example.com/data")]
+                source_url="https://example.com/data")]
 
 
 # the rows showing in the preview, as plain text
-
 def preview_rows(app):
     return [list(row) for row in app.table_view.preview.rows]
 
-
 # keep the window running until the background export finishes
-
 def wait_for_export(app, timeout=5.0):
     end = time.time() + timeout
     while app.export_bar.busy and time.time() < end:
@@ -337,13 +288,10 @@ def wait_for_export(app, timeout=5.0):
     app.update()
     assert not app.export_bar.busy, "the export never finished"
 
-
 # read a saved csv back as rows
-
 def read_csv(path):
     with open(path, encoding="utf-8-sig", newline="") as handle:
         return list(csv.reader(handle))
-
 
 @pytest.fixture(autouse=True)
 def reset_export_bar(app):
@@ -352,9 +300,7 @@ def reset_export_bar(app):
     app.export_bar.clean_var.set(True)
     app.export_bar.format_var.set("csv")
 
-
 # numbers are cleaned by default, and the clean box swaps between cleaned and original text
-
 def test_numbers_are_cleaned_by_default_and_the_box_flips_between_before_and_after(app, monkeypatch):
     run_fetch(app, monkeypatch, parse=lambda page: prices())
     wait_until_idle(app)
@@ -372,9 +318,7 @@ def test_numbers_are_cleaned_by_default_and_the_box_flips_between_before_and_aft
     assert preview_rows(app) == [["Alpha", "1234"], ["Beta", "5"]]
     assert "Turned 2 cells" in app.export_bar.clean_label.cget("text")
 
-
 # a new page is left alone when the clean box is off
-
 def test_a_new_page_respects_the_clean_box_being_off(app, monkeypatch):
     app.export_bar.clean_var.set(False)
     run_fetch(app, monkeypatch, parse=lambda page: prices())
@@ -382,9 +326,7 @@ def test_a_new_page_respects_the_clean_box_being_off(app, monkeypatch):
     assert preview_rows(app) == [["Alpha", "$1,234"], ["Beta", "$5"]]
     assert app.export_bar.clean_label.cget("text") == CLEAN_OFF_TEXT
 
-
 # flipping the clean box keeps the ticks and the chosen table
-
 def test_toggling_the_clean_box_keeps_the_ticks_and_the_chosen_table(app, monkeypatch):
     tables = [Table("One", ["A"], [["$1"]]), Table("Two", ["A"], [["$2"]])]
     run_fetch(app, monkeypatch, parse=lambda page: tables)
@@ -398,9 +340,7 @@ def test_toggling_the_clean_box_keeps_the_ticks_and_the_chosen_table(app, monkey
     assert [t.name for t in app.table_view.checked_tables()] == ["Two"]
     assert app.table_view.checked_tables()[0].rows == [["$2"]]                            # the original text
 
-
 # flipping the clean box with no tables does no harm
-
 def test_toggling_with_no_tables_is_harmless(app, monkeypatch):
     run_fetch(app, monkeypatch, parse=lambda page: [])
     wait_until_idle(app)
@@ -411,9 +351,7 @@ def test_toggling_with_no_tables_is_harmless(app, monkeypatch):
     app.export_bar._on_clean()
     assert "Numbers like" in app.export_bar.clean_label.cget("text")
 
-
 # cleaning runs on a worker thread, not the window thread
-
 def test_cleaning_happens_on_the_worker_thread_not_in_the_window(app, monkeypatch):
     seen = []
     real = app_module.clean_all
@@ -423,9 +361,7 @@ def test_cleaning_happens_on_the_worker_thread_not_in_the_window(app, monkeypatc
     wait_until_idle(app)
     assert seen and seen[0] is not threading.main_thread()
 
-
 # the Export button counts the ticked tables
-
 def test_the_export_button_follows_the_ticks(app, monkeypatch):
     tables = [Table("Sales", ["A"], [["1"]]), Table("Menu", ["A"], [["x"]], is_layout=True)]
     run_fetch(app, monkeypatch, parse=lambda page: tables)
@@ -441,9 +377,7 @@ def test_the_export_button_follows_the_ticks(app, monkeypatch):
     app.table_view.select_all()
     assert app.export_bar.export_button.cget("text") == "Export 2 tables"
 
-
 # the Export button stays off when the page has no tables
-
 def test_the_export_button_is_off_when_a_page_has_no_tables(app, monkeypatch):
     run_fetch(app, monkeypatch, parse=lambda page: prices())
     wait_until_idle(app)
@@ -452,9 +386,7 @@ def test_the_export_button_is_off_when_a_page_has_no_tables(app, monkeypatch):
     assert str(app.export_bar.export_button.cget("state")) == "disabled"
     assert app.export_bar.export_button.cget("text") == "Export"
 
-
 # Export saves what the preview shows, as a real file
-
 def test_exporting_from_the_window_saves_what_the_preview_shows(app, monkeypatch, tmp_path):
     run_fetch(app, monkeypatch, parse=lambda page: prices())
     wait_until_idle(app)
@@ -472,9 +404,7 @@ def test_exporting_from_the_window_saves_what_the_preview_shows(app, monkeypatch
     assert read_csv(tmp_path / "Prices (2).csv")[1] == ["Alpha", "$1,234"]
     assert read_csv(tmp_path / "Prices.csv")[1] == ["Alpha", "1234"]                      # the first file is safe
 
-
 # only the ticked tables get exported
-
 def test_only_ticked_tables_are_exported(app, monkeypatch, tmp_path):
     tables = [Table("One", ["A"], [["1"]]), Table("Two", ["A"], [["2"]]), Table("Three", ["A"], [["3"]])]
     run_fetch(app, monkeypatch, parse=lambda page: tables)
@@ -486,9 +416,7 @@ def test_only_ticked_tables_are_exported(app, monkeypatch, tmp_path):
     assert sorted(p.name for p in tmp_path.iterdir()) == ["One.csv", "Three.csv"]
     assert app.status_var.get() == f"Saved 2 files to {tmp_path}."
 
-
 # an Excel export holds real numbers, not text
-
 def test_an_excel_export_from_the_window_has_real_numbers(app, monkeypatch, tmp_path):
     from openpyxl import load_workbook
     run_fetch(app, monkeypatch, parse=lambda page: prices())
@@ -499,9 +427,7 @@ def test_an_excel_export_from_the_window_has_real_numbers(app, monkeypatch, tmp_
     wait_for_export(app)
     assert load_workbook(tmp_path / "Prices.xlsx")["Prices"]["B2"].value == 1234
 
-
 # a failed export shows in red in the status bar
-
 def test_a_failed_export_shows_in_red_in_the_status_bar(app, monkeypatch, tmp_path):
     blocker = tmp_path / "file.txt"
     blocker.write_text("hi")
@@ -512,18 +438,15 @@ def test_a_failed_export_shows_in_red_in_the_status_bar(app, monkeypatch, tmp_pa
     wait_for_export(app)
     assert app.status_is_error and "Couldn't" in app.status_var.get()
 
-
-# -- remembering things and opening a saved page
-
+# remembering things and opening a saved page
 from siphon_app.core.parser import parse_page as real_parse_page
 from siphon_app.gui.export_bar import default_folder
 from siphon_app.settings import Settings, load_settings
 
 # a tiny saved web page with one table, for the Open file tests
 SAVED_PAGE = (b"<html><body><h2>Sales</h2><table><tr><th>Name</th><th>Total</th></tr>"
-              b"<tr><td>A</td><td>$5</td></tr><tr><td>B</td><td>$7</td></tr><tr><td>C</td><td>$9</td></tr>"
-              b"</table></body></html>")
-
+            b"<tr><td>A</td><td>$5</td></tr><tr><td>B</td><td>$7</td></tr><tr><td>C</td><td>$9</td></tr>"
+            b"</table></body></html>")
 
 @pytest.fixture
 def own_settings(app, tmp_path):
@@ -538,24 +461,18 @@ def own_settings(app, tmp_path):
     if app.style.theme_mode == "dark":
         app.toggle_theme()
 
-
 # write a saved web page into the temp folder and hand back its path
-
 def saved_html(tmp_path, name="page.html", content=SAVED_PAGE):
     path = tmp_path / name
     path.write_bytes(content)
     return path
 
-
 def choose_file(monkeypatch, result):
     """Pretend the person picked `result` in the Open dialog ('' means they pressed Cancel)."""
     monkeypatch.setattr(app_module.filedialog, "askopenfilename", lambda **kwargs: str(result))
 
-
-# -- recent pages
-
+# recent pages
 # a good fetch goes on the recent list and is saved to disk
-
 def test_a_successful_fetch_is_remembered_and_saved(app, monkeypatch, own_settings):
     run_fetch(app, monkeypatch, parse=lambda page: prices())
     wait_until_idle(app)
@@ -563,9 +480,7 @@ def test_a_successful_fetch_is_remembered_and_saved(app, monkeypatch, own_settin
     assert list(app.url_entry.cget("values")) == ["https://example.com/data"]
     assert load_settings(own_settings).recent_urls == ["https://example.com/data"]       # really on disk
 
-
 # a failed fetch is not remembered
-
 def test_a_failed_fetch_is_not_remembered(app, monkeypatch, own_settings):
     def broken(url, cancel_event=None):
         raise FetchError("nope")
@@ -573,9 +488,7 @@ def test_a_failed_fetch_is_not_remembered(app, monkeypatch, own_settings):
     wait_until_idle(app)
     assert app.settings.recent_urls == [] and not own_settings.exists()
 
-
 # a cancelled fetch is not remembered
-
 def test_a_cancelled_fetch_is_not_remembered(app, monkeypatch, own_settings):
     release = threading.Event()
     def slow(url, cancel_event=None):
@@ -588,18 +501,14 @@ def test_a_cancelled_fetch_is_not_remembered(app, monkeypatch, own_settings):
     app.update()
     assert app.settings.recent_urls == []
 
-
 # the same page twice is listed once, newest first
-
 def test_fetching_the_same_page_twice_lists_it_once_and_newest_goes_first(app, monkeypatch, own_settings):
     for url in ("a.com/x", "b.com/y", "a.com/x"):
         run_fetch(app, monkeypatch, url=url)
         wait_until_idle(app)
     assert app.settings.recent_urls == ["https://a.com/x", "https://b.com/y"]
 
-
 # choosing an address from the recent list fetches it
-
 def test_picking_a_recent_page_from_the_list_fetches_it(app, monkeypatch, own_settings):
     seen = []
     monkeypatch.setattr(app_module, "fetch", lambda u, cancel_event=None: seen.append(u) or PAGE)
@@ -609,11 +518,8 @@ def test_picking_a_recent_page_from_the_list_fetches_it(app, monkeypatch, own_se
     wait_until_idle(app)
     assert seen == ["https://example.com/older"]
 
-
-# -- the saved choices
-
+# the saved choices
 # collect_settings reads the current controls into a Settings object
-
 def test_collect_settings_reads_the_controls(app, own_settings, tmp_path):
     app.export_bar.folder_var.set(f"  {tmp_path}  ")
     app.export_bar.format_var.set("json")
@@ -622,9 +528,7 @@ def test_collect_settings_reads_the_controls(app, own_settings, tmp_path):
     got = app.collect_settings()
     assert (got.export_folder, got.export_format, got.clean_numbers, got.theme) == (str(tmp_path), "json", False, "dark")
 
-
 # collect_settings gives back a copy and leaves the app's own settings alone
-
 def test_collect_settings_is_a_copy_and_changes_nothing(app, own_settings):
     app.settings.recent_urls.append("https://a.com")
     app.export_bar.format_var.set("xlsx")
@@ -632,35 +536,27 @@ def test_collect_settings_is_a_copy_and_changes_nothing(app, own_settings):
     got.recent_urls.append("https://b.com")
     assert app.settings.recent_urls == ["https://a.com"] and app.settings.export_format == "csv"
 
-
 # a hidden window keeps the remembered size instead of its tiny real one
-
 def test_a_hidden_window_keeps_the_remembered_size(app, own_settings):
     app.settings.window_width, app.settings.window_height = 1234, 777
     got = app.collect_settings()                       # the test window is withdrawn, so its size is meaningless
     assert (got.window_width, got.window_height) == (1234, 777)
 
-
 # save_settings writes the settings file
-
 def test_save_settings_writes_the_file(app, own_settings):
     app.export_bar.format_var.set("xlsx")
     app.save_settings()
     assert load_settings(own_settings).export_format == "xlsx"
     assert app.settings.export_format == "xlsx"
 
-
 # a failed save is swallowed, so the window carries on
-
 def test_a_save_that_fails_does_not_bother_the_window(app, own_settings, tmp_path):
     blocker = tmp_path / "file.txt"
     blocker.write_text("x")
     app.settings_file = blocker / "settings.json"
     app.save_settings()                                # must not raise
 
-
 # a good export remembers the folder, format and clean choice
-
 def test_a_successful_export_remembers_the_folder_and_format(app, monkeypatch, own_settings, tmp_path):
     run_fetch(app, monkeypatch, parse=lambda page: prices())
     wait_until_idle(app)
@@ -675,9 +571,7 @@ def test_a_successful_export_remembers_the_folder_and_format(app, monkeypatch, o
     saved = load_settings(own_settings)
     assert (saved.export_folder, saved.export_format, saved.clean_numbers) == (str(out), "xlsx", False)
 
-
 # a failed export does not save its folder
-
 def test_a_failed_export_does_not_save_anything(app, monkeypatch, own_settings, tmp_path):
     run_fetch(app, monkeypatch, parse=lambda page: prices())
     wait_until_idle(app)
@@ -689,9 +583,7 @@ def test_a_failed_export_does_not_save_anything(app, monkeypatch, own_settings, 
     wait_for_export(app)
     assert not own_settings.exists() or load_settings(own_settings).export_folder != str(blocker)
 
-
 # saved choices go back into the controls (the end puts the shared window back for later tests)
-
 def test_remembered_choices_are_put_back_into_the_controls(app, own_settings, tmp_path):
     app.settings = Settings(export_folder=str(tmp_path), export_format="json", clean_numbers=False, theme="dark")
     app._apply_settings()
@@ -705,9 +597,7 @@ def test_remembered_choices_are_put_back_into_the_controls(app, own_settings, tm
     app.settings = Settings()
     app._apply_settings()
 
-
 # a saved folder that no longer exists falls back to the Downloads folder
-
 def test_a_remembered_folder_that_vanished_falls_back_to_downloads(app, own_settings, tmp_path):
     app.settings = Settings(export_folder=str(tmp_path / "deleted"))
     app._apply_settings()
@@ -715,11 +605,8 @@ def test_a_remembered_folder_that_vanished_falls_back_to_downloads(app, own_sett
     app.settings = Settings()
     app._apply_settings()
 
-
-# -- opening a saved page
-
+# opening a saved page
 # Open file shows the tables but leaves the address box and recent list alone
-
 def test_open_file_shows_the_tables_and_leaves_the_address_box_and_recents_alone(app, monkeypatch, own_settings, tmp_path):
     monkeypatch.setattr(app_module, "parse_page", real_parse_page)
     choose_file(monkeypatch, saved_html(tmp_path))
@@ -732,9 +619,7 @@ def test_open_file_shows_the_tables_and_leaves_the_address_box_and_recents_alone
     assert app.url_var.get() == "https://typed.example/"
     assert app.settings.recent_urls == [] and not own_settings.exists()
 
-
 # a file opened from disk exports like any fetched page
-
 def test_open_file_then_export_works_like_any_page(app, monkeypatch, own_settings, tmp_path):
     monkeypatch.setattr(app_module, "parse_page", real_parse_page)
     choose_file(monkeypatch, saved_html(tmp_path))
@@ -747,36 +632,28 @@ def test_open_file_then_export_works_like_any_page(app, monkeypatch, own_setting
     wait_for_export(app)
     assert read_csv(out / "Sales.csv") == [["Name", "Total"], ["A", "5"], ["B", "7"], ["C", "9"]]
 
-
 # pressing Cancel in the Open dialog does nothing
-
 def test_cancelling_the_open_dialog_does_nothing(app, monkeypatch, own_settings):
     app.set_status("before")
     choose_file(monkeypatch, "")
     app.on_open_file()
     assert not app.busy and app.status_var.get() == "before"
 
-
 # a file that is not a web page gives a red message
-
 def test_a_file_that_is_not_a_web_page_shows_a_red_message(app, monkeypatch, own_settings, tmp_path):
     choose_file(monkeypatch, saved_html(tmp_path, "notes.txt"))
     app.on_open_file()
     wait_until_idle(app)
     assert app.status_is_error and "saved web pages" in app.status_var.get()
 
-
 # a missing file gives a red message
-
 def test_a_missing_file_shows_a_red_message(app, monkeypatch, own_settings, tmp_path):
     choose_file(monkeypatch, tmp_path / "gone.html")
     app.on_open_file()
     wait_until_idle(app)
     assert app.status_is_error and "doesn't exist" in app.status_var.get()
 
-
 # Open file is ignored while a download is running
-
 def test_open_file_is_ignored_while_a_job_is_running(app, monkeypatch, own_settings):
     asked = []
     monkeypatch.setattr(app_module.filedialog, "askopenfilename", lambda **kw: asked.append(1) or "")
@@ -787,9 +664,7 @@ def test_open_file_is_ignored_while_a_job_is_running(app, monkeypatch, own_setti
         app.busy = False
     assert asked == []
 
-
 # the Open button locks while busy, and Ctrl+O is bound
-
 def test_the_open_button_is_disabled_while_busy_and_ctrl_o_is_bound(app, monkeypatch):
     release = threading.Event()
     run_fetch(app, monkeypatch, fetch=lambda u, cancel_event=None: release.wait(2) or PAGE)
@@ -799,16 +674,12 @@ def test_the_open_button_is_disabled_while_busy_and_ctrl_o_is_bound(app, monkeyp
     assert str(app.open_button.cget("state")) == "normal"
     assert app.bind("<Control-o>")
 
-
 # safety check: the tests never use the real settings file
-
 def test_the_tests_never_touch_the_real_settings_file(app):
     from siphon_app.settings import settings_path
     assert app.settings_file != settings_path()
 
-
-# -- guards that only show up in unusual situations
-
+# guards that only show up in unusual situations
 def test_opening_a_file_raises_no_hidden_errors(app, monkeypatch, own_settings, tmp_path):
     """Errors inside window callbacks are swallowed by Tk, so catch them explicitly."""
     problems = []
@@ -819,9 +690,7 @@ def test_opening_a_file_raises_no_hidden_errors(app, monkeypatch, own_settings, 
     wait_until_idle(app)
     assert problems == []
 
-
 # a maximised window does not overwrite the remembered size (the window state is faked)
-
 def test_a_maximised_window_does_not_overwrite_the_remembered_size(app, own_settings, monkeypatch):
     app.settings.window_width, app.settings.window_height = 1000, 640
     monkeypatch.setattr(app, "winfo_width", lambda: 1900)
@@ -833,9 +702,7 @@ def test_a_maximised_window_does_not_overwrite_the_remembered_size(app, own_sett
     got = app.collect_settings()
     assert (got.window_width, got.window_height) == (1900, 1000)
 
-
 # closing the window saves the settings (destroy is faked so the shared window survives)
-
 def test_closing_the_window_saves_the_settings(app, own_settings, monkeypatch):
     monkeypatch.setattr(app, "destroy", lambda: None)          # keep the shared test window alive
     app.export_bar.format_var.set("json")
@@ -843,10 +710,8 @@ def test_closing_the_window_saves_the_settings(app, own_settings, monkeypatch):
     assert load_settings(own_settings).export_format == "json"
 
 
-# -- polite fetching through the window
-
+# polite fetching through the window
 # a note about a remembered copy is added to the status
-
 def test_a_note_about_a_remembered_copy_is_added_to_the_status(app, monkeypatch, own_settings):
     noted = FetchedPage(url="https://example.com/data", content=b"<html></html>", content_type="text/html",
                         note="Used the copy from 40 seconds ago; the site wasn't contacted.")
@@ -856,17 +721,13 @@ def test_a_note_about_a_remembered_copy_is_added_to_the_status(app, monkeypatch,
     assert text.startswith("Found 1 table.") and text.endswith("the site wasn't contacted.")
     assert not app.status_is_error
 
-
 # no note means the status stays as it was
-
 def test_no_note_means_the_status_is_unchanged(app, monkeypatch, own_settings):
     run_fetch(app, monkeypatch, parse=lambda page: prices())
     wait_until_idle(app)
     assert app.status_var.get() == "Found 1 table."
 
-
 # a site that says no robots shows its reason in red and is not remembered
-
 def test_a_site_that_says_no_robots_shows_its_reason_in_red(app, monkeypatch, own_settings):
     def refused(url, cancel_event=None):
         raise FetchError("example.com asks robots not to read this page (robots.txt), so siphon didn't fetch it.")
@@ -875,9 +736,7 @@ def test_a_site_that_says_no_robots_shows_its_reason_in_red(app, monkeypatch, ow
     assert app.status_is_error and "robots.txt" in app.status_var.get()
     assert app.settings.recent_urls == []                      # a refused page is not remembered
 
-
 # Reload drops the remembered copy first (forget is swapped for a list that records calls)
-
 def test_reload_forgets_the_remembered_copy_first(app, monkeypatch, own_settings):
     forgotten = []
     monkeypatch.setattr(app_module, "forget", forgotten.append)
@@ -888,9 +747,7 @@ def test_reload_forgets_the_remembered_copy_first(app, monkeypatch, own_settings
     wait_until_idle(app)
     assert forgotten == ["https://example.com/data"]
 
-
 # a normal fetch keeps the remembered copy
-
 def test_a_normal_fetch_keeps_the_remembered_copy(app, monkeypatch, own_settings):
     forgotten = []
     monkeypatch.setattr(app_module, "forget", forgotten.append)
@@ -898,9 +755,7 @@ def test_a_normal_fetch_keeps_the_remembered_copy(app, monkeypatch, own_settings
     wait_until_idle(app)
     assert forgotten == []
 
-
 # Reload with a bad address forgets nothing and starts nothing
-
 def test_reload_with_a_bad_address_forgets_nothing(app, monkeypatch):
     forgotten = []
     monkeypatch.setattr(app_module, "forget", forgotten.append)
@@ -908,15 +763,11 @@ def test_reload_with_a_bad_address_forgets_nothing(app, monkeypatch):
     app.on_fetch(fresh=True)
     assert forgotten == [] and app.status_is_error and not app.busy
 
-
 # Ctrl+R is bound to Reload
-
 def test_ctrl_r_is_bound_to_reload(app):
     assert app.bind("<Control-r>")
 
-
 # the window downloads through the polite fetcher
-
 def test_the_window_downloads_through_the_polite_fetcher():
     from siphon_app.core import polite
     assert app_module.fetch is polite.polite_fetch

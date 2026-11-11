@@ -30,18 +30,14 @@ PLACEHOLDER = "Tables will show up here."
 TIP = "Tip: right-click a column heading to rename or hide it. Drag a heading's edge to resize it."
 COLUMN_MIN, COLUMN_MAX = 50, 200      # starting width of a column is its widest text, kept between these (pixels)
 
-
-# ---- helpers that need no window, so they are easy to test -----------------------------
-
+#helpers that need no window, so they are easy to test
 def display(cell: Cell) -> str:
     """A cell as text: None becomes an empty string."""
     return "" if cell is None else str(cell)
 
-
 def size_text(table: Table) -> str:
     """'214 x 5' style size for the table list."""
     return f"{table.n_rows:,} \u00d7 {table.n_cols}"          # 214 rows, 5 columns
-
 
 def filter_rows(rows: list[list[Cell]], query: str) -> list[list[Cell]]:
     """Rows containing every word of the query (any column, ignoring capitals)."""
@@ -55,7 +51,6 @@ def filter_rows(rows: list[list[Cell]], query: str) -> list[list[Cell]]:
             kept.append(row)
     return kept
 
-
 def _sort_key(cell: Cell) -> tuple:
     """Sort key: numbers (even '$1,234' or '12%') go by value and come before text."""
     if isinstance(cell, (int, float)) and not isinstance(cell, bool):
@@ -66,14 +61,12 @@ def _sort_key(cell: Cell) -> tuple:
         return (0, float(parsed.value), "")
     return (1, 0.0, text.lower())
 
-
 def sort_rows(rows: list[list[Cell]], column: int, descending: bool = False) -> list[list[Cell]]:
     """Sort by one column. Blank cells always go last, whichever way you sort."""
     filled = [row for row in rows if display(row[column]).strip() != ""]
     blank = [row for row in rows if display(row[column]).strip() == ""]
     filled.sort(key=lambda row: _sort_key(row[column]), reverse=descending)
     return filled + blank
-
 
 def rows_to_tsv(headers: list[str], rows: list[list[Cell]]) -> str:
     """Tab-separated text that pastes straight into Excel."""
@@ -83,7 +76,6 @@ def rows_to_tsv(headers: list[str], rows: list[list[Cell]]) -> str:
     lines += ["\t".join(clean(cell) for cell in row) for row in rows]
     return "\n".join(lines) + "\n"
 
-
 def is_numeric_column(rows: list[list[Cell]], column: int) -> bool:
     """True if 80% or more of the first rows in this column are numbers (so we right-align it)."""
     sample = [row[column] for row in rows[:200] if display(row[column]).strip() != ""]
@@ -92,9 +84,7 @@ def is_numeric_column(rows: list[list[Cell]], column: int) -> bool:
     numbers = sum(1 for cell in sample if _sort_key(cell)[0] == 0)
     return numbers / len(sample) >= 0.8
 
-
-# ---- the widget ------------------------------------------------------------------------
-
+#the widget
 class TableView(ttk.Frame):
     """The table list plus the preview. Keeps its own ticks, search, sort and column tweaks."""
 
@@ -132,12 +122,11 @@ class TableView(ttk.Frame):
         self._build_main()
         self.set_tables([])
 
-    # ---- building the widgets --------------------------------------------------------
-
+    #building the widgets
     def _build_placeholder(self) -> None:
         """The 'Tables will show up here' message, shown when there is nothing to list."""
         self.placeholder = ttk.Label(self, text=PLACEHOLDER, bootstyle="secondary",
-                                     anchor="center", justify="center")
+                                    anchor="center", justify="center")
         self.placeholder.grid(row=0, column=0, sticky="nsew")
 
     def _build_main(self) -> None:
@@ -158,7 +147,7 @@ class TableView(ttk.Frame):
         self.list_title.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 6))
 
         self.table_list = ttk.Treeview(left, columns=("use", "name", "size"), show="headings",
-                                       selectmode="browse")
+                                    selectmode="browse")
         self.table_list.heading("use", text="")
         self.table_list.heading("name", text="Table")
         self.table_list.heading("size", text="Rows \u00d7 cols")
@@ -182,9 +171,9 @@ class TableView(ttk.Frame):
         buttons = ttk.Frame(left)
         buttons.grid(row=4, column=0, columnspan=2, sticky="w", pady=(8, 0))
         ttk.Button(buttons, text="Select all", bootstyle="secondary-outline",
-                   command=self.select_all).pack(side="left")
+                command=self.select_all).pack(side="left")
         ttk.Button(buttons, text="Select none", bootstyle="secondary-outline",
-                   command=self.select_none).pack(side="left", padx=(8, 0))
+                command=self.select_none).pack(side="left", padx=(8, 0))
 
         # right side: name and size, search/Copy/Profile, the grid, footer
         right = ttk.Frame(self.main)
@@ -210,11 +199,11 @@ class TableView(ttk.Frame):
         self.search_entry.grid(row=0, column=1, sticky="ew")
         self.search_entry.bind("<KeyRelease>", self._on_search_key)
         self.copy_button = ttk.Button(tools, text="Copy", bootstyle="secondary-outline",
-                                      command=self.copy_table)
+                                    command=self.copy_table)
         self.copy_button.grid(row=0, column=2, padx=(8, 0))
         # Profile opens the column summary pop-up
         self.profile_button = ttk.Button(tools, text="Profile", bootstyle="secondary-outline",
-                                         command=self.show_profile)
+                                        command=self.show_profile)
         self.profile_button.grid(row=0, column=3, padx=(8, 0))
 
         # the preview grid (it brings its own scroll bars)
@@ -228,8 +217,7 @@ class TableView(ttk.Frame):
         self.tip_label = ttk.Label(right, text=TIP, bootstyle="secondary")
         self.tip_label.grid(row=4, column=0, columnspan=2, sticky="w")
 
-    # ---- public ----------------------------------------------------------------------
-
+    #public
     def set_tables(self, tables: list[Table], message: str = PLACEHOLDER) -> None:
         """Show a new set of tables (or the placeholder, if there are none)."""
         self._tables = list(tables)
@@ -296,8 +284,7 @@ class TableView(ttk.Frame):
         """Table number `index` as it should look now: original with hides and renames applied."""
         return reshape(self._tables[index], self._hidden.get(index), self._names.get(index))
 
-    # ---- column tools ----------------------------------------------------------------
-
+    #column tools
     def hide_column(self, position: int) -> bool:
         """Hide the column at this position in the PREVIEW. False if nothing was hidden."""
         if self._current is None or not 0 <= position < len(self._view_columns):
@@ -357,7 +344,7 @@ class TableView(ttk.Frame):
         menu.add_command(label="Hide this column", command=lambda: self.hide_column(position))
         menu.add_separator()
         menu.add_command(label="Reset columns", command=self.reset_columns,
-                         state="normal" if self.columns_changed_for_current() else "disabled")
+                        state="normal" if self.columns_changed_for_current() else "disabled")
         return menu
 
     def _open_column_menu(self, position: int, x_root: int, y_root: int) -> None:
@@ -384,8 +371,7 @@ class TableView(ttk.Frame):
             self.profile_window.destroy()
         self.profile_window = ProfileWindow(self, self._view(self._current))
 
-    # ---- the list --------------------------------------------------------------------
-
+    #the list
     def _refresh_list(self) -> None:
         """Rebuild the table list (respecting 'Hide layout tables') and re-pick what to preview."""
         hide = self.hide_layout.get()
@@ -401,7 +387,7 @@ class TableView(ttk.Frame):
 
         if not self._visible:
             self.hint_label.configure(text=f"All {hidden} tables look like page layout. "
-                                           "Untick \"Hide layout tables\" to see them.")
+                                        "Untick \"Hide layout tables\" to see them.")
         elif hidden:
             word = "table" if hidden == 1 else "tables"
             self.hint_label.configure(text=f"{hidden} layout {word} hidden.")
@@ -456,8 +442,7 @@ class TableView(ttk.Frame):
             self.toggle(int(focused))
         return "break"
 
-    # ---- the preview -----------------------------------------------------------------
-
+    #the preview
     def _reset_preview_controls(self) -> None:
         """Clear the search box and the sort, and scroll the preview back to the top left."""
         self.search_var.set("")
@@ -477,7 +462,7 @@ class TableView(ttk.Frame):
         """Fill the grid for the current table: search, then sort, then draw (capped at MAX_PREVIEW_ROWS)."""
         table = self._view(self._current)                 # with hidden and renamed columns applied
         self._view_columns = visible_columns(self._tables[self._current].n_cols,
-                                             self._hidden.get(self._current, set()))
+                                            self._hidden.get(self._current, set()))
         rows = filter_rows(table.rows, self.search_var.get())
         if self._sort_column is not None:
             rows = sort_rows(rows, self._sort_column, self._sort_descending)
@@ -500,11 +485,11 @@ class TableView(ttk.Frame):
                 widths.append(max(COLUMN_MIN, min(wanted, COLUMN_MAX)))
             aligns.append("e" if is_numeric_column(table.rows, column) else "w")
         self.preview.set_data(table.headers, [[display(cell) for cell in row] for row in rows[:MAX_PREVIEW_ROWS]],
-                              widths, aligns, self._sort_column, self._sort_descending)
+                            widths, aligns, self._sort_column, self._sort_descending)
 
         if len(rows) > MAX_PREVIEW_ROWS:
             self.footer_label.configure(text=f"Showing the first {MAX_PREVIEW_ROWS:,} of {len(rows):,} rows. "
-                                             "Copy and export still include every row.")
+                                            "Copy and export still include every row.")
         elif self.search_var.get().strip():
             self.footer_label.configure(text=f"{len(rows):,} of {table.n_rows:,} rows match.")
         else:
